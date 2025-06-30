@@ -18,7 +18,8 @@ class Logger:
 
     def __init__(self, filename):
         self.terminal = sys.stdout
-        self.log = open(filename, "w")
+        # 指定文件编码为utf-8
+        self.log = open(filename, "w", encoding="utf-8")
 
     def write(self, message):
         self.terminal.write(message)
@@ -53,9 +54,9 @@ base_log_file = "model_training_log.txt"
 log_file = get_unique_filename(base_log_file)
 
 # 重定向输出流
-sys.stdout = Logger(log_file)
+sys.stdout = Logger('outputs/'+log_file)
 
-print(f"开始模型训练，日志将保存到 {log_file}")
+print(f"开始模型训练，日志将保存到 {'outputs/'+log_file}")
 print(f"开始时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 print("=" * 50)
 
@@ -161,7 +162,7 @@ total_time = end_time - start_time
 print("\n" + "=" * 50)
 print(f"模型训练完成！总运行时间: {timedelta(seconds=int(total_time))}")
 print(f"结束时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-print(f"详细日志已保存到: {log_file}")
+print(f"详细日志已保存到: {'outputs/'+log_file}")
 
 # 恢复标准输出
 sys.stdout = sys.__stdout__
