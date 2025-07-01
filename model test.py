@@ -10,6 +10,7 @@ from datetime import timedelta
 import os
 import random
 from deap import base, creator, tools, algorithms
+import joblib  # 新增：用于模型序列化
 
 seed = 2520157  # 随机种子
 np.random.seed(seed)
@@ -59,6 +60,7 @@ MUTPB_FINAL = 0.05  # 最终变异概率
 
 # 创建输出目录
 os.makedirs("outputs", exist_ok=True)
+os.makedirs("models", exist_ok=True)  # 新增：模型保存目录
 
 # 开始计时
 start_time = time.time()
@@ -176,6 +178,7 @@ def custom_mutate(individual):
                 individual[i] = random.choice(['sqrt', 'log2', None])
     return individual,
 
+
 toolbox.register("evaluate", evalRF)
 toolbox.register("mate", tools.cxTwoPoint)  # 两点交叉
 toolbox.register("mutate", custom_mutate)  # 自定义变异
@@ -217,6 +220,12 @@ ga_rf = RandomForestRegressor(
 print("开始训练基于遗传算法优化的随机森林模型...")
 ga_rf.fit(X_train, y_train)
 print("遗传算法优化的随机森林模型训练完成！")
+
+# 保存模型到文件（新增）
+model_filename = "ga_optimized_rf_model.joblib"
+model_path = os.path.join("models", model_filename)
+joblib.dump(ga_rf, model_path)
+print(f"模型已保存至: {model_path}")
 
 # 使用遗传算法优化的随机森林进行预测
 y_pred_ga_rf = ga_rf.predict(X_test)
@@ -275,5 +284,37 @@ while True:
         break
     counter += 0.1
 
-
 plt.show()
+
+
+# 新增：模型加载函数（可在其他脚本中调用）
+def load_saved_rf_model():
+    """加载保存的RF模型，用于后续预测"""
+    if os.path.exists(model_path):
+        return joblib.load(model_path)
+    else:
+        raise FileNotFoundError(f"模型文件不存在，请先训练模型并保存。路径: {model_path}")
+
+
+# 示例：在其他脚本中调用模型（新增）
+if __name__ == "__main__":
+    # 加载模型
+    loaded_model = load_saved_rf_model()
+
+    # 准备新数据（打印参数）进行预测
+    new_prediction_data = pd.DataFrame({
+        'printing_temperature': [210, 190],
+        'feed_rate': [100, 80],
+        'printing_speed': [50, 70],
+        'Height': [10, 12],
+        'Width': [8, 9]
+    })
+
+    # 预测弹性模量
+    predictions = loaded_model.predict(new_prediction_data)
+    print("\n新参数组合的弹性模量预测结果:")
+    for i, params in new_prediction_data.iterrows():
+        print(f"参数组合 {i + 1}:")
+        print(
+            f"  温度: {params['printing_temperature']}°C, 进料速率: {params['feed_rate']}%, 打印速度: {params['printing_speed']}mm/s")
+        print(f"  预测弹性模量: {predictions[i]:.2f} MPa")
