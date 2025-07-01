@@ -50,8 +50,8 @@ def get_unique_filename(base_name):
 
 
 # 遗传算法参数设置
-POPULATION_SIZE = 20  # 种群大小
-NGEN = 20  # 迭代代数
+POPULATION_SIZE = 50  # 种群大小
+NGEN = 15  # 迭代代数
 CXPB_INIT = 0.6  # 初始交叉概率
 CXPB_FINAL = 0.95  # 最终交叉概率
 MUTPB_INIT = 0.4  # 初始变异概率
@@ -275,23 +275,5 @@ while True:
         break
     counter += 0.1
 
-# 绘制特征重要性条形图
-plt.figure(figsize=(10, 6))
-plt.bar(range(X.shape[1]), importances[indices], align='center')
-plt.xticks(range(X.shape[1]), [feature_names[i] for i in indices], rotation=45)
-plt.xlabel('Features', fontsize=12)
-plt.ylabel('Importance', fontsize=12)
-plt.title('Feature Importance', fontsize=14)
-plt.grid(True, linestyle='--', alpha=0.7)
-
-# 保存特征重要性条形图
-base_feature_img = "GA_RF_Feature_Importance"
-while True:
-    feature_img_filename = f"{os.path.join('outputs', base_feature_img)}{counter}{img_extension}"
-    if not os.path.exists(feature_img_filename):
-        plt.savefig(feature_img_filename, dpi=300, bbox_inches='tight')
-        print(f"特征重要性条形图已保存至: {feature_img_filename}")
-        break
-    counter += 0.1
 
 plt.show()
