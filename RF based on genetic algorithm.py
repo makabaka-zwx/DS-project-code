@@ -51,7 +51,7 @@ def get_unique_filename(base_name):
 
 # 遗传算法参数设置
 POPULATION_SIZE = 20  # 种群大小
-NGEN = 10  # 迭代代数
+NGEN = 20  # 迭代代数
 CXPB = 0.8  # 交叉概率
 MUTPB = 0.2  # 变异概率
 
@@ -92,7 +92,7 @@ creator.create("Individual", list, fitness=creator.FitnessMax)
 
 # 定义参数范围和类型，对max_depth单独处理
 toolbox = base.Toolbox()
-toolbox.register("n_estimators", random.randint, 50, 300)  # 决策树数量
+toolbox.register("n_estimators", random.randint, 50, 200)  # 决策树数量
 toolbox.register("max_depth", lambda: random.choice([None, 5, 10, 15, 20])) # max_depth的可能取值
 toolbox.register("min_samples_split", random.randint, 2, 10)  # 最小分割样本数
 toolbox.register("min_samples_leaf", random.randint, 1, 4)  # 最小叶子节点样本数
