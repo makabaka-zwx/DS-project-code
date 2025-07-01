@@ -52,8 +52,10 @@ def get_unique_filename(base_name):
 # 遗传算法参数设置
 POPULATION_SIZE = 20  # 种群大小
 NGEN = 20  # 迭代代数
-CXPB = 0.8  # 交叉概率
-MUTPB = 0.2  # 变异概率
+CXPB_INIT = 0.6  # 初始交叉概率
+CXPB_FINAL = 0.95  # 最终交叉概率
+MUTPB_INIT = 0.4  # 初始变异概率
+MUTPB_FINAL = 0.05  # 最终变异概率
 
 # 创建输出目录
 os.makedirs("outputs", exist_ok=True)
@@ -71,6 +73,14 @@ sys.stdout = Logger(log_file)
 print(f"开始模型训练，日志将保存到 {log_file}")
 print(f"开始时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 print("=" * 50)
+print("遗传算法参数:")
+print(f"种群大小: {POPULATION_SIZE}")
+print(f"迭代代数: {NGEN}")
+print(f"初始交叉概率: {CXPB_INIT}")
+print(f"最终交叉概率: {CXPB_FINAL}")
+print(f"初始变异概率: {MUTPB_INIT}")
+print(f"最终变异概率: {MUTPB_FINAL}")
+print("=" * 50)
 
 # 加载数据
 data = pd.read_csv('./data_FEA_ANN_FEA-ANN.csv')
@@ -82,6 +92,7 @@ data = data[selected_columns]
 # 准备特征和目标变量
 X = data.drop('Experiment_mean(MPa)', axis=1)
 y = data['Experiment_mean(MPa)']
+feature_names = X.columns  # 保存特征名称
 
 # 划分训练集和测试集
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
@@ -93,7 +104,7 @@ creator.create("Individual", list, fitness=creator.FitnessMax)
 # 定义参数范围和类型，对max_depth单独处理
 toolbox = base.Toolbox()
 toolbox.register("n_estimators", random.randint, 50, 200)  # 决策树数量
-toolbox.register("max_depth", lambda: random.choice([None, 5, 10, 15, 20])) # max_depth的可能取值
+toolbox.register("max_depth", lambda: random.choice([None, 5, 10, 15, 20]))  # max_depth的可能取值
 toolbox.register("min_samples_split", random.randint, 2, 10)  # 最小分割样本数
 toolbox.register("min_samples_leaf", random.randint, 1, 4)  # 最小叶子节点样本数
 toolbox.register("max_features", lambda: random.choice(['sqrt', 'log2', None]))  # 最大特征数
@@ -137,10 +148,22 @@ def evalRF(individual):
     return np.mean(scores),
 
 
+# 自适应遗传算子：根据迭代代数动态调整交叉和变异概率
+def adaptive_crossover_mutation(generation):
+    """
+    自适应调整交叉和变异概率：
+    - 线性从初始值过渡到最终值
+    """
+    progress = generation / NGEN
+    cxpb = CXPB_INIT + (CXPB_FINAL - CXPB_INIT) * progress
+    mutpb = MUTPB_INIT - (MUTPB_INIT - MUTPB_FINAL) * progress
+    return cxpb, mutpb
+
+
 # 注册遗传操作，自定义变异操作处理max_depth
 def custom_mutate(individual):
     for i in range(len(individual)):
-        if random.random() < 0.2:  # 变异概率
+        if random.random() < MUTPB_INIT:  # 使用初始变异概率作为基准
             if i == 1:  # 针对max_depth的处理
                 individual[i] = random.choice([None, 5, 10, 15, 20])
             elif i == 0:  # n_estimators
@@ -170,7 +193,7 @@ stats.register("min", np.min)
 stats.register("max", np.max)
 
 # 运行遗传算法
-pop, log = algorithms.eaSimple(pop, toolbox, cxpb=CXPB, mutpb=MUTPB, ngen=NGEN,
+pop, log = algorithms.eaSimple(pop, toolbox, cxpb=CXPB_INIT, mutpb=MUTPB_INIT, ngen=NGEN,
                                stats=stats, halloffame=hof, verbose=True)
 
 # 获取最优参数
@@ -210,6 +233,14 @@ print(f'决定系数 (R2): {r2_ga_rf}')
 print(f'平均绝对误差 (MAE): {mae_ga_rf}')
 print(f'中位数绝对误差 (MedAE): {medae_ga_rf}')
 
+# 计算特征重要性
+importances = ga_rf.feature_importances_
+indices = np.argsort(importances)[::-1]
+
+print("\n特征重要性排序:")
+for f in range(X.shape[1]):
+    print(f"{f + 1}. {feature_names[indices[f]]}: {importances[indices[f]]:.4f}")
+
 # 计算总运行时间
 end_time = time.time()
 total_time = end_time - start_time
@@ -241,6 +272,25 @@ while True:
     if not os.path.exists(img_filename):
         plt.savefig(img_filename, dpi=300, bbox_inches='tight')
         print(f"遗传算法优化随机森林散点图已保存至: {img_filename}")
+        break
+    counter += 0.1
+
+# 绘制特征重要性条形图
+plt.figure(figsize=(10, 6))
+plt.bar(range(X.shape[1]), importances[indices], align='center')
+plt.xticks(range(X.shape[1]), [feature_names[i] for i in indices], rotation=45)
+plt.xlabel('Features', fontsize=12)
+plt.ylabel('Importance', fontsize=12)
+plt.title('Feature Importance', fontsize=14)
+plt.grid(True, linestyle='--', alpha=0.7)
+
+# 保存特征重要性条形图
+base_feature_img = "GA_RF_Feature_Importance"
+while True:
+    feature_img_filename = f"{os.path.join('outputs', base_feature_img)}{counter}{img_extension}"
+    if not os.path.exists(feature_img_filename):
+        plt.savefig(feature_img_filename, dpi=300, bbox_inches='tight')
+        print(f"特征重要性条形图已保存至: {feature_img_filename}")
         break
     counter += 0.1
 
