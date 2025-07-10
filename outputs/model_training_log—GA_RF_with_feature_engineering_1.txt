@@ -1,0 +1,103 @@
+开始模型训练，日志将保存到 outputs\model_training_log—GA_RF_with_feature_engineering_1.txt
+开始时间: 2025-07-10 11:52:56
+==================================================
+遗传算法参数:
+种群大小: 50
+迭代代数: 15
+初始交叉概率: 0.6
+最终交叉概率: 0.95
+初始变异概率: 0.4
+最终变异概率: 0.05
+特征筛选 - 相关系数阈值: 0.2
+特征筛选 - 互信息阈值: 0.1
+==================================================
+开始数据探索与特征工程...
+
+数据描述性统计:
+       printing_temperature  ...  Experiment_std(MPa)
+count             48.000000  ...            48.000000
+mean             208.437500  ...            47.399410
+std               13.843973  ...            38.526601
+min              180.000000  ...            13.146434
+25%              200.000000  ...            18.633536
+50%              210.000000  ...            33.462451
+75%              210.000000  ...            63.756513
+max              250.000000  ...           165.180662
+
+[8 rows x 7 columns]
+特征分布图已保存至: plots\feature_distributions.png
+
+特征与目标变量相关系数:
+Experiment_mean(MPa)    1.000000
+feed_rate               0.864945
+Width                   0.815902
+Height                  0.710599
+Experiment_std(MPa)     0.299425
+printing_speed          0.186534
+printing_temperature    0.094447
+Name: Experiment_mean(MPa), dtype: float64
+相关系数热图已保存至: plots\correlation_heatmap.png
+
+特征与目标变量互信息:
+Height                  0.834601
+feed_rate               0.751818
+Width                   0.629878
+printing_speed          0.381415
+Experiment_std(MPa)     0.367347
+printing_temperature    0.247100
+dtype: float64
+互信息重要性图已保存至: plots\mutual_info_importance.png
+
+相关系数筛选后保留特征: ['feed_rate', 'Width', 'Height', 'Experiment_std(MPa)']
+互信息筛选后保留特征: ['Height', 'feed_rate', 'Width', 'printing_speed', 'Experiment_std(MPa)', 'printing_temperature']
+综合筛选后保留特征: ['Height', 'Experiment_std(MPa)', 'feed_rate', 'Width']
+筛选后特征箱线图已保存至: plots\filtered_features_boxplot.png
+
+缺失值统计:
+Height                 0
+Experiment_std(MPa)    0
+feed_rate              0
+Width                  0
+dtype: int64
+训练集和测试集分布已保存至: plots\train_test_distribution.png
+开始遗传算法优化随机森林参数...
+gen	nevals	avg     	std    	min     	max     
+0  	50    	-1928.98	68.9577	-2064.81	-1764.08
+1  	40    	-1877.39	75.2196	-1995.24	-1724.11
+2  	31    	-1822.57	69.449 	-1955.49	-1702.91
+3  	37    	-1790.22	61.9995	-1956.33	-1702.91
+4  	38    	-1793.91	78.8876	-2039.92	-1702.91
+5  	41    	-1758.65	73.0836	-1996.1 	-1702.91
+6  	32    	-1755.61	73.8166	-1982.25	-1702.91
+7  	36    	-1763.96	84.0007	-1970.01	-1702.91
+8  	43    	-1732.68	54.8163	-1929.21	-1702.91
+9  	39    	-1740.79	73.6345	-2061.84	-1702.91
+10 	33    	-1756.55	82.3509	-1988.22	-1702.91
+11 	33    	-1749.54	75.9392	-1978.02	-1702.91
+12 	38    	-1757.48	90.6661	-2056.13	-1702.91
+13 	36    	-1745.53	73.9819	-1954.02	-1702.91
+14 	39    	-1741.15	63.5675	-1940.6 	-1702.91
+15 	44    	-1761.75	86.305 	-1969.66	-1702.91
+最优参数: n_estimators=62, max_depth=10, min_samples_split=10, min_samples_leaf=1, max_features=sqrt
+开始训练基于遗传算法优化的随机森林模型...
+遗传算法优化的随机森林模型训练完成！
+模型已保存至: models\ga_optimized_rf_model_with_feature_engineering.joblib
+
+遗传算法优化的随机森林模型评估：
+均方误差 (MSE): 1863.7997530565906
+决定系数 (R2): 0.7385477868356018
+平均绝对误差 (MAE): 33.37848168655806
+中位数绝对误差 (MedAE): 21.487312335361395
+
+特征重要性排序:
+1. feed_rate: 0.3865
+2. Width: 0.3330
+3. Height: 0.2588
+4. Experiment_std(MPa): 0.0218
+随机森林特征重要性图已保存至: plots\rf_feature_importance.png
+残差图已保存至: plots\residuals_plot.png
+
+==================================================
+模型训练完成！总运行时间: 0:08:41
+结束时间: 2025-07-10 12:01:37
+详细日志已保存到: outputs\model_training_log—GA_RF_with_feature_engineering_1.txt
