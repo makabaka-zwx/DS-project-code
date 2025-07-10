@@ -10,7 +10,7 @@ from datetime import timedelta
 import os
 import random
 from deap import base, creator, tools, algorithms
-import joblib  # 新增：用于模型序列化
+import joblib  # 用于模型序列化
 
 seed = 2520157  # 随机种子
 np.random.seed(seed)
@@ -34,7 +34,7 @@ class Logger:
 
 
 def get_unique_filename(base_name):
-    """生成唯一的文件名，如果已存在则添加序号后缀"""
+    """生成唯一的日志文件名，如果已存在则添加序号后缀"""
     if not os.path.exists(base_name):
         return base_name
 
@@ -59,8 +59,8 @@ MUTPB_INIT = 0.4  # 初始变异概率
 MUTPB_FINAL = 0.05  # 最终变异概率
 
 # 创建输出目录
-os.makedirs("outputs", exist_ok=True)
-os.makedirs("models", exist_ok=True)  # 新增：模型保存目录
+os.makedirs("outputs", exist_ok=True)   # 日志与图片的保存目录
+os.makedirs("models", exist_ok=True)  # 模型保存目录
 
 # 开始计时
 start_time = time.time()
@@ -182,7 +182,7 @@ def custom_mutate(individual):
 toolbox.register("evaluate", evalRF)
 toolbox.register("mate", tools.cxTwoPoint)  # 两点交叉
 toolbox.register("mutate", custom_mutate)  # 自定义变异
-toolbox.register("select", tools.selTournament, tournsize=3)  # 锦标赛选择
+toolbox.register("select", tools.selTournament, tournsize=3)  # 锦标赛选择策略
 
 # 开始遗传算法优化
 print("开始遗传算法优化随机森林参数...")
