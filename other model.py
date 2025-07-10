@@ -1,5 +1,5 @@
-# 目的是找到一个RA类似的同类型模型，然后方便对比
-
+# 目的是找到一个RF类似的同类型模型，然后方便对比
+# 本代码的目前作用是进行数据探索，来修改输入数据的特征数目。
 
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
@@ -58,7 +58,7 @@ def get_unique_filename(base_name):
 
 # 遗传算法参数设置
 POPULATION_SIZE = 50  # 种群大小
-NGEN = 15  # 迭代代数
+NGEN = 10  # 迭代代数
 CXPB_INIT = 0.6  # 初始交叉概率
 CXPB_FINAL = 0.95  # 最终交叉概率
 MUTPB_INIT = 0.4  # 初始变异概率
@@ -197,7 +197,7 @@ print("\n缺失值统计:")
 print(missing_values)
 
 # 准备特征和目标变量
-X = data[final_features]
+X = data[final_features].drop('Experiment_std(MPa)', axis=1)
 y = data['Experiment_mean(MPa)']
 feature_names = X.columns  # 保存特征名称
 
@@ -391,15 +391,15 @@ plt.figure(figsize=(12, 6))
 plt.subplot(1, 2, 1)
 plt.scatter(y_pred_ga_rf, residuals, alpha=0.7)
 plt.axhline(y=0, color='r', linestyle='--')
-plt.xlabel('预测值')
-plt.ylabel('残差')
-plt.title('残差图')
+plt.xlabel('Predicted Value')
+plt.ylabel('Residual')
+plt.title('Residual Plot')
 plt.grid(True, alpha=0.3)
 
 # 15. 绘制残差分布（新增）
 plt.subplot(1, 2, 2)
 sns.histplot(residuals, kde=True)
-plt.title('残差分布')
+plt.title('Residual Distribution')
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
 residuals_plot = os.path.join("plots", "residuals_plot.png")
