@@ -1,5 +1,5 @@
-
 # 本代码的目前作用是进行数据探索，来修改输入数据的特征数目。
+# 采用的是RF-GA模型与特征：'Height', 'feed_rate', 'Width'。
 
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor

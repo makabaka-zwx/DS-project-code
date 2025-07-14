@@ -138,23 +138,25 @@ r2_ensemble = r2_score(y_test, y_pred_ensemble)
 mae_ensemble = mean_absolute_error(y_test, y_pred_ensemble)
 medae_ensemble = median_absolute_error(y_test, y_pred_ensemble)
 
+
+# 修改输出格式，保留4位小数
 print('最优随机森林模型评估：')
-print(f'均方误差 (MSE): {mse_best_rf}')
-print(f'决定系数 (R2): {r2_best_rf}')
-print(f'平均绝对误差 (MAE): {mae_best_rf}')
-print(f'中位数绝对误差 (MedAE): {medae_best_rf}')
+print(f'均方误差 (MSE): {mse_best_rf:.4f}')
+print(f'决定系数 (R2): {r2_best_rf:.4f}')
+print(f'平均绝对误差 (MAE): {mae_best_rf:.4f}')
+print(f'中位数绝对误差 (MedAE): {medae_best_rf:.4f}')
 
 print('\n融合后的随机森林模型评估：')
-print(f'均方误差 (MSE): {mse_fused_rf}')
-print(f'决定系数 (R2): {r2_fused_rf}')
-print(f'平均绝对误差 (MAE): {mae_fused_rf}')
-print(f'中位数绝对误差 (MedAE): {medae_fused_rf}')
+print(f'均方误差 (MSE): {mse_fused_rf:.4f}')
+print(f'决定系数 (R2): {r2_fused_rf:.4f}')
+print(f'平均绝对误差 (MAE): {mae_fused_rf:.4f}')
+print(f'中位数绝对误差 (MedAE): {medae_fused_rf:.4f}')
 
 print('\n集成模型评估：')
-print(f'均方误差 (MSE): {mse_ensemble}')
-print(f'决定系数 (R2): {r2_ensemble}')
-print(f'平均绝对误差 (MAE): {mae_ensemble}')
-print(f'中位数绝对误差 (MedAE): {medae_ensemble}')
+print(f'均方误差 (MSE): {mse_ensemble:.4f}')
+print(f'决定系数 (R2): {r2_ensemble:.4f}')
+print(f'平均绝对误差 (MAE): {mae_ensemble:.4f}')
+print(f'中位数绝对误差 (MedAE): {medae_ensemble:.4f}')
 
 # 计算总运行时间
 end_time = time.time()
