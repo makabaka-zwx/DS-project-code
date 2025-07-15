@@ -58,7 +58,7 @@ def get_unique_filename(base_name):
 
 # 遗传算法参数设置
 POPULATION_SIZE = 50  # 种群大小
-NGEN = 10  # 迭代代数
+NGEN = 15  # 迭代代数
 CXPB_INIT = 0.6  # 初始交叉概率
 CXPB_FINAL = 0.95  # 最终交叉概率
 MUTPB_INIT = 0.4  # 初始变异概率
@@ -360,10 +360,10 @@ mae_ga_rf = mean_absolute_error(y_test, y_pred_ga_rf)
 medae_ga_rf = median_absolute_error(y_test, y_pred_ga_rf)
 
 print('\n遗传算法优化的随机森林模型评估：')
-print(f'均方误差 (MSE): {mse_ga_rf}')
-print(f'决定系数 (R2): {r2_ga_rf}')
-print(f'平均绝对误差 (MAE): {mae_ga_rf}')
-print(f'中位数绝对误差 (MedAE): {medae_ga_rf}')
+print(f'均方误差 (MSE): {mse_ga_rf:.4f}')
+print(f'决定系数 (R2): {r2_ga_rf:.4f}')
+print(f'平均绝对误差 (MAE): {mae_ga_rf:.4f}')
+print(f'中位数绝对误差 (MedAE): {medae_ga_rf:.4f}')
 
 # 计算特征重要性
 importances = ga_rf.feature_importances_

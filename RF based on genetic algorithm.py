@@ -237,10 +237,10 @@ mae_ga_rf = mean_absolute_error(y_test, y_pred_ga_rf)
 medae_ga_rf = median_absolute_error(y_test, y_pred_ga_rf)
 
 print('\n遗传算法优化的随机森林模型评估：')
-print(f'均方误差 (MSE): {mse_ga_rf}')
-print(f'决定系数 (R2): {r2_ga_rf}')
-print(f'平均绝对误差 (MAE): {mae_ga_rf}')
-print(f'中位数绝对误差 (MedAE): {medae_ga_rf}')
+print(f'均方误差 (MSE): {mse_ga_rf:.4f}')
+print(f'决定系数 (R2): {r2_ga_rf:.4f}')
+print(f'平均绝对误差 (MAE): {mae_ga_rf:.4f}')
+print(f'中位数绝对误差 (MedAE): {medae_ga_rf:.4f}')
 
 # 计算特征重要性
 importances = ga_rf.feature_importances_
