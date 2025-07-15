@@ -71,7 +71,7 @@ MI_THRESHOLD = 0.1  # 互信息阈值
 # 创建输出目录
 os.makedirs("outputs", exist_ok=True)   # 日志与图片的保存目录
 os.makedirs("models", exist_ok=True)  # 模型保存目录
-os.makedirs("plots", exist_ok=True)   # 新增：图表保存目录
+os.makedirs("data explore", exist_ok=True)   # 新增：图表保存目录
 
 # 开始计时
 start_time = time.time()
@@ -124,7 +124,7 @@ for i, col in enumerate(data.columns):
     sns.histplot(data[col], kde=True)
     plt.title(f'{col} Distribution')
 plt.tight_layout()
-feat_dist_img = os.path.join("plots", "feature_distributions.png")
+feat_dist_img = os.path.join("data explore", "feature_distributions.png")
 plt.savefig(feat_dist_img, dpi=300)
 print(f"特征分布图已保存至: {feat_dist_img}")
 
@@ -138,7 +138,7 @@ print(target_corr)
 plt.figure(figsize=(12, 10))
 sns.heatmap(correlation, annot=True, cmap='coolwarm', fmt='.2f')
 plt.title('Feature Correlation Heatmap')
-corr_heatmap = os.path.join("plots", "correlation_heatmap.png")
+corr_heatmap = os.path.join("data explore", "correlation_heatmap.png")
 plt.savefig(corr_heatmap, dpi=300)
 print(f"相关系数热图已保存至: {corr_heatmap}")
 
@@ -156,7 +156,7 @@ plt.barh(mutual_info.index, mutual_info)
 plt.xlabel('Mutual Information Value')
 plt.title('Feature Importance by Mutual Information')
 plt.grid(True, alpha=0.3)
-mi_importance = os.path.join("plots", "mutual_info_importance.png")
+mi_importance = os.path.join("data explore", "mutual_info_importance.png")
 plt.savefig(mi_importance, dpi=300)
 print(f"互信息重要性图已保存至: {mi_importance}")
 
@@ -187,7 +187,7 @@ for i, col in enumerate(final_features):
     sns.boxplot(x=data[col])
     plt.title(f'{col} Boxplot')
 plt.tight_layout()
-filtered_boxplot = os.path.join("plots", "filtered_features_boxplot.png")
+filtered_boxplot = os.path.join("data explore", "filtered_features_boxplot.png")
 plt.savefig(filtered_boxplot, dpi=300)
 print(f"筛选后特征箱线图已保存至: {filtered_boxplot}")
 
@@ -218,7 +218,7 @@ plt.subplot(1, 2, 2)
 sns.histplot(y_test, kde=True)
 plt.title('Target Variable Distribution - Testing Set')
 plt.tight_layout()
-train_test_dist = os.path.join("plots", "train_test_distribution.png")
+train_test_dist = os.path.join("data explore", "train_test_distribution.png")
 plt.savefig(train_test_dist, dpi=300)
 print(f"训练集和测试集分布已保存至: {train_test_dist}")
 
@@ -381,7 +381,7 @@ plt.xlabel('特征')
 plt.ylabel('重要性')
 plt.title('随机森林特征重要性')
 plt.grid(True, alpha=0.3)
-rf_importance = os.path.join("plots", "rf_feature_importance.png")
+rf_importance = os.path.join("data explore", "rf_feature_importance.png")
 plt.savefig(rf_importance, dpi=300)
 print(f"随机森林特征重要性图已保存至: {rf_importance}")
 
@@ -402,7 +402,7 @@ sns.histplot(residuals, kde=True)
 plt.title('Residual Distribution')
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
-residuals_plot = os.path.join("plots", "residuals_plot.png")
+residuals_plot = os.path.join("data explore", "residuals_plot.png")
 plt.savefig(residuals_plot, dpi=300)
 print(f"残差图已保存至: {residuals_plot}")
 
@@ -420,9 +420,9 @@ sys.stdout = sys.__stdout__
 # 绘制遗传算法优化的随机森林模型预测值与真实值的散点图
 plt.figure(figsize=(10, 8))
 plt.scatter(y_test, y_pred_ga_rf, alpha=0.7)
-plt.xlabel('真实值', fontsize=12)
-plt.ylabel('预测值', fontsize=12)
-plt.title('基于特征工程和GA优化的RF模型预测结果', fontsize=14)
+plt.xlabel('True Values', fontsize=12)
+plt.ylabel('Predicted Values', fontsize=12)
+plt.title('Prediction results of GA-RF model based on feature engineering', fontsize=14)
 plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', linewidth=2)
 plt.grid(True, linestyle='--', alpha=0.7)
 

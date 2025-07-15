@@ -68,7 +68,7 @@ PREPROCESSING_METHOD = 'minmax'  # 可选: 'minmax', 'standard', 'none'
 # 创建输出目录
 os.makedirs("outputs", exist_ok=True)  # 日志与图片的保存目录
 os.makedirs("models", exist_ok=True)  # 模型保存目录
-os.makedirs("plots", exist_ok=True)  # 图表保存目录
+os.makedirs("data explore", exist_ok=True)  # 图表保存目录
 
 # 开始计时
 start_time = time.time()
@@ -173,7 +173,7 @@ def visualize_data_distribution(X_before, X_after, method):
         plt.title(f'After: {col}')
 
     plt.tight_layout()
-    distribution_img = os.path.join("plots", f"data_distribution_{method}.png")
+    distribution_img = os.path.join("data explore", f"data_distribution_{method}.png")
     plt.savefig(distribution_img, dpi=300)
     print(f"数据分布对比图已保存至: {distribution_img}")
 
