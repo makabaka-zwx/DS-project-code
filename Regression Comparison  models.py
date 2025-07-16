@@ -274,6 +274,46 @@ for key in list(datasets.keys()):
         for i in indices:
             print(f"{feature_names[i]}: {importances[i]:.4f}")
 
+# 找出R²最高的模型
+best_model_key = max(results, key=lambda k: results[k]['R2'])
+best_model_name = model_names[best_model_key]
+best_r2 = results[best_model_key]['R2']
+
+print(f"\nR²最高的模型: {best_model_name} (R²={best_r2:.4f})")
+
+# 绘制R²最高模型的拟合图像
+plt.figure(figsize=(15, 6))
+
+# 预测值与真实值散点图
+plt.subplot(1, 2, 1)
+y_true = datasets[best_model_key]['y_test']
+y_pred = predictions[best_model_key]
+plt.scatter(y_true, y_pred, alpha=0.7)
+plt.xlabel('True Values')
+plt.ylabel('Predicted values')
+plt.title(f'{best_model_name} - Predicted values vs True Values')
+plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'r--')
+
+# 添加R²和MSE信息
+plt.annotate(f'R² = {best_r2:.4f}\nMSE = {results[best_model_key]["MSE"]:.4f}',
+             xy=(0.05, 0.95), xycoords='axes fraction',
+             bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8),
+             fontsize=10, ha='left', va='top')
+
+# 残差图
+plt.subplot(1, 2, 2)
+residuals = y_true - y_pred
+plt.scatter(y_pred, residuals, alpha=0.7)
+plt.axhline(y=0, color='r', linestyle='--')
+plt.xlabel('Predicted Value')
+plt.ylabel('Residual')
+plt.title(f'{best_model_name} - Residual Plot')
+plt.grid(True, linestyle='--', alpha=0.7)
+
+plt.tight_layout()
+plt.savefig(get_unique_filename(os.path.join("Regression_Comparison", "best_model_fit.png")), dpi=300)
+plt.show()
+
 # 计算总运行时间
 end_time = time.time()
 total_time = end_time - start_time
@@ -302,7 +342,7 @@ for i, key in enumerate(keys, 1):
     plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'r--')
 
 plt.tight_layout()
-plt.savefig(os.path.join("Regression_Comparison", "model_comparison.png"), dpi=300)
+plt.savefig(get_unique_filename(os.path.join("Regression_Comparison", "model_comparison.png")), dpi=300)
 plt.show()
 
 # 绘制评估指标对比图（折线图）
@@ -352,8 +392,7 @@ plt.tight_layout(rect=[0, 0, 0.85, 1])  # 为右侧的图例留出空间
 plt.figlegend(loc='center right', bbox_to_anchor=(1, 0.5),
               title='Models', fontsize='medium')
 
-plt.savefig(os.path.join("Regression_Comparison", "metrics_comparison_line.png"), dpi=300, bbox_inches='tight')
+plt.savefig(get_unique_filename(os.path.join("Regression_Comparison", "metrics_comparison_line.png")), dpi=300, bbox_inches='tight')
 plt.show()
-
 
 print("\n可视化图表已保存至: Regression_Comparison/")
