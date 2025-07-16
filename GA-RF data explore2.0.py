@@ -77,7 +77,7 @@ os.makedirs("data explore", exist_ok=True)   # 新增：图表保存目录
 start_time = time.time()
 
 # 生成唯一的日志文件名
-base_log_file = "model_training_log—GA_RF_with_feature_engineering.txt"
+base_log_file = "model_training_log—GA_RF_with_feature_engineering2.0.txt"
 log_file = get_unique_filename(os.path.join("outputs", base_log_file))
 
 # 重定向输出流
@@ -100,12 +100,18 @@ print("=" * 50)
 # 加载数据
 data = pd.read_csv('./data_FEA_ANN_FEA-ANN.csv')
 
-# 筛选保留指定列
+# 合并Height和Width为aspect_ratio
+data['aspect_ratio'] = data['Height'] / data['Width']
+
+# 选择需要的列（排除原始的Height和Width）
 selected_columns = [
     'printing_temperature', 'feed_rate', 'printing_speed',
-    'Height', 'Width', 'Experiment_mean(MPa)', 'Experiment_std(MPa)'
+    'aspect_ratio', 'Experiment_mean(MPa)'
 ]
 data = data[selected_columns]
+
+print("数据特征合并完成:")
+print(f"- 新增特征: aspect_ratio (Height/Width)")
 
 # 数据探索与特征工程（新增）
 print("开始数据探索与特征工程...")
@@ -124,7 +130,7 @@ for i, col in enumerate(data.columns):
     sns.histplot(data[col], kde=True)
     plt.title(f'{col} Distribution')
 plt.tight_layout()
-feat_dist_img = os.path.join("data explore", "feature_distributions.png")
+feat_dist_img = os.path.join("data explore", "feature_distributions2.0.png")
 plt.savefig(feat_dist_img, dpi=300)
 print(f"特征分布图已保存至: {feat_dist_img}")
 
@@ -138,7 +144,7 @@ print(target_corr)
 plt.figure(figsize=(12, 10))
 sns.heatmap(correlation, annot=True, cmap='coolwarm', fmt='.2f')
 plt.title('Feature Correlation Heatmap')
-corr_heatmap = os.path.join("data explore", "correlation_heatmap.png")
+corr_heatmap = os.path.join("data explore", "correlation_heatmap2.0.png")
 plt.savefig(corr_heatmap, dpi=300)
 print(f"相关系数热图已保存至: {corr_heatmap}")
 
@@ -156,7 +162,7 @@ plt.barh(mutual_info.index, mutual_info)
 plt.xlabel('Mutual Information Value')
 plt.title('Feature Importance by Mutual Information')
 plt.grid(True, alpha=0.3)
-mi_importance = os.path.join("data explore", "mutual_info_importance.png")
+mi_importance = os.path.join("data explore", "mutual_info_importance2.0.png")
 plt.savefig(mi_importance, dpi=300)
 print(f"互信息重要性图已保存至: {mi_importance}")
 
@@ -187,7 +193,7 @@ for i, col in enumerate(final_features):
     sns.boxplot(x=data[col])
     plt.title(f'{col} Boxplot')
 plt.tight_layout()
-filtered_boxplot = os.path.join("data explore", "filtered_features_boxplot.png")
+filtered_boxplot = os.path.join("data explore", "filtered_features_boxplot2.0.png")
 plt.savefig(filtered_boxplot, dpi=300)
 print(f"筛选后特征箱线图已保存至: {filtered_boxplot}")
 
@@ -197,7 +203,7 @@ print("\n缺失值统计:")
 print(missing_values)
 
 # 准备特征和目标变量
-X = data[final_features].drop('Experiment_std(MPa)', axis=1)
+X = data[final_features]
 y = data['Experiment_mean(MPa)']
 feature_names = X.columns  # 保存特征名称
 
@@ -218,7 +224,7 @@ plt.subplot(1, 2, 2)
 sns.histplot(y_test, kde=True)
 plt.title('Target Variable Distribution - Testing Set')
 plt.tight_layout()
-train_test_dist = os.path.join("data explore", "train_test_distribution.png")
+train_test_dist = os.path.join("data explore", "train_test_distribution2.0.png")
 plt.savefig(train_test_dist, dpi=300)
 print(f"训练集和测试集分布已保存至: {train_test_dist}")
 
@@ -345,7 +351,7 @@ ga_rf.fit(X_train, y_train)
 print("遗传算法优化的随机森林模型训练完成！")
 
 # 保存模型到文件
-model_filename = "ga_optimized_rf_model_with_feature_engineering.joblib"
+model_filename = "ga_optimized_rf_model_with_feature_engineering2.0.joblib"
 model_path = os.path.join("models", model_filename)
 joblib.dump(ga_rf, model_path)
 print(f"模型已保存至: {model_path}")
@@ -377,11 +383,11 @@ for f in range(X.shape[1]):
 plt.figure(figsize=(10, 6))
 plt.bar(range(len(indices)), importances[indices])
 plt.xticks(range(len(indices)), [feature_names[i] for i in indices], rotation=45)
-plt.xlabel('特征')
-plt.ylabel('重要性')
-plt.title('随机森林特征重要性')
+plt.xlabel('Features')
+plt.ylabel('Importance')
+plt.title('Random Forest Feature Importance')
 plt.grid(True, alpha=0.3)
-rf_importance = os.path.join("data explore", "rf_feature_importance.png")
+rf_importance = os.path.join("data explore", "rf_feature_importance2.0.png")
 plt.savefig(rf_importance, dpi=300)
 print(f"随机森林特征重要性图已保存至: {rf_importance}")
 
@@ -402,7 +408,7 @@ sns.histplot(residuals, kde=True)
 plt.title('Residual Distribution')
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
-residuals_plot = os.path.join("data explore", "residuals_plot.png")
+residuals_plot = os.path.join("data explore", "residuals_plot2.0.png")
 plt.savefig(residuals_plot, dpi=300)
 print(f"残差图已保存至: {residuals_plot}")
 
@@ -433,7 +439,7 @@ plt.text(y_test.min() + 0.05 * (y_test.max() - y_test.min()),
          bbox=dict(facecolor='white', alpha=0.8))
 
 # 保存散点图到outputs文件夹
-base_img_name = "GA_RF_Prediction_with_FE"
+base_img_name = "GA_RF_Prediction_with_FE2.0"
 img_extension = ".png"
 base_img_path = os.path.join("outputs", base_img_name)
 counter = 1.0

@@ -1,0 +1,97 @@
+开始模型训练，日志将保存到 outputs\model_training_log—GA_RF_with_feature_engineering2.0.txt
+开始时间: 2025-07-16 05:02:40
+==================================================
+遗传算法参数:
+种群大小: 50
+迭代代数: 15
+初始交叉概率: 0.6
+最终交叉概率: 0.95
+初始变异概率: 0.4
+最终变异概率: 0.05
+特征筛选 - 相关系数阈值: 0.2
+特征筛选 - 互信息阈值: 0.1
+==================================================
+数据特征合并完成:
+- 新增特征: aspect_ratio (Height/Width)
+开始数据探索与特征工程...
+
+数据描述性统计:
+       printing_temperature  feed_rate  ...  aspect_ratio  Experiment_mean(MPa)
+count             48.000000  48.000000  ...     48.000000             48.000000
+mean             208.437500  26.875000  ...      0.876259            326.482275
+std               13.843973   5.855076  ...      0.078561             69.580865
+min              180.000000  16.000000  ...      0.627630            145.500000
+25%              200.000000  20.000000  ...      0.863999            275.450000
+50%              210.000000  30.000000  ...      0.885755            329.750000
+75%              210.000000  30.000000  ...      0.912103            372.950000
+max              250.000000  42.000000  ...      1.101032            513.000000
+
+[8 rows x 5 columns]
+特征分布图已保存至: data explore\feature_distributions2.0.png
+
+特征与目标变量相关系数:
+Experiment_mean(MPa)    1.000000
+feed_rate               0.864945
+printing_speed          0.186534
+printing_temperature    0.094447
+aspect_ratio           -0.421584
+Name: Experiment_mean(MPa), dtype: float64
+相关系数热图已保存至: data explore\correlation_heatmap2.0.png
+
+特征与目标变量互信息:
+feed_rate               0.744179
+printing_speed          0.345431
+printing_temperature    0.274143
+aspect_ratio            0.245284
+dtype: float64
+互信息重要性图已保存至: data explore\mutual_info_importance2.0.png
+
+相关系数筛选后保留特征: ['feed_rate', 'aspect_ratio']
+互信息筛选后保留特征: ['feed_rate', 'printing_speed', 'printing_temperature', 'aspect_ratio']
+综合筛选后保留特征: ['feed_rate', 'aspect_ratio']
+筛选后特征箱线图已保存至: data explore\filtered_features_boxplot2.0.png
+
+缺失值统计:
+feed_rate       0
+aspect_ratio    0
+dtype: int64
+训练集和测试集分布已保存至: data explore\train_test_distribution2.0.png
+开始遗传算法优化随机森林参数...
+gen	nevals	avg     	std    	min     	max     
+0  	50    	-1538.88	318.131	-1955.54	-1111.48
+1  	40    	-1283.82	239.083	-1863.4 	-1105.36
+2  	31    	-1223.83	225.486	-1983   	-1104.14
+3  	37    	-1182.9 	155.507	-1790.29	-1105.36
+4  	38    	-1180.45	171.488	-1922.72	-1105.36
+5  	41    	-1187.75	199.076	-1966.24	-1105.36
+6  	32    	-1197.87	206.376	-1816.03	-1105.36
+7  	36    	-1164.01	168.104	-1862.74	-1100.78
+8  	43    	-1182.79	200.35 	-1883.01	-1095.52
+9  	39    	-1195.35	217.633	-1913.93	-1095.52
+10 	33    	-1160.34	190.146	-1988.82	-1095.52
+11 	33    	-1176.9 	188.983	-1797.72	-1095.52
+12 	38    	-1170.78	194.571	-1898.51	-1095.52
+13 	36    	-1216.14	249.811	-2013.9 	-1095.52
+14 	39    	-1160.07	162.203	-1817.42	-1095.52
+15 	44    	-1154.34	137.222	-1759.41	-1095.52
+最优参数: n_estimators=89, max_depth=15, min_samples_split=9, min_samples_leaf=1, max_features=None
+开始训练基于遗传算法优化的随机森林模型...
+遗传算法优化的随机森林模型训练完成！
+模型已保存至: models\ga_optimized_rf_model_with_feature_engineering2.0.joblib
+
+遗传算法优化的随机森林模型评估：
+均方误差 (MSE): 2274.0600
+决定系数 (R2): 0.6810
+平均绝对误差 (MAE): 37.1708
+中位数绝对误差 (MedAE): 30.3743
+
+特征重要性排序:
+1. feed_rate: 0.7851
+2. aspect_ratio: 0.2149
+随机森林特征重要性图已保存至: data explore\rf_feature_importance2.0.png
+残差图已保存至: data explore\residuals_plot2.0.png
+
+==================================================
+模型训练完成！总运行时间: 0:05:52
+结束时间: 2025-07-16 05:08:33
+详细日志已保存到: outputs\model_training_log—GA_RF_with_feature_engineering2.0.txt
