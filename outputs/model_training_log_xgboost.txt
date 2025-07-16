@@ -1,0 +1,54 @@
+开始模型训练，日志将保存到 outputs/model_training_log_xgboost.txt
+开始时间: 2025-07-16 10:34:26
+==================================================
+数据准备完成:
+- 特征集1 (aspect_ratio): ['printing_temperature', 'feed_rate', 'printing_speed', 'aspect_ratio', 'Experiment_mean(MPa)']
+- 特征集2 (Height+Width): ['printing_temperature', 'feed_rate', 'printing_speed', 'Height', 'Width', 'Experiment_mean(MPa)']
+
+开始aspect_ratio特征集的XGBoost参数搜索...
+aspect_ratio特征集的XGBoost参数搜索完成！
+
+开始Height+Width特征集的XGBoost参数搜索...
+Height+Width特征集的XGBoost参数搜索完成！
+
+模型评估结果（保留4位小数）:
+==================================================
+
+XGBoost (with aspect_ratio)评估：
+均方误差 (MSE): 963.6061
+决定系数 (R2): 0.8648
+平均绝对误差 (MAE): 26.9629
+中位数绝对误差 (MedAE): 30.5156
+
+XGBoost (with Height+Width)评估：
+均方误差 (MSE): 825.5814
+决定系数 (R2): 0.8842
+平均绝对误差 (MAE): 24.0529
+中位数绝对误差 (MedAE): 27.0479
+
+最优参数:
+------------------------------
+aspect_ratio特征集:
+colsample_bytree: 0.8
+learning_rate: 0.1
+max_depth: 4
+min_child_weight: 1
+n_estimators: 100
+reg_alpha: 1.0
+reg_lambda: 1.0
+subsample: 0.8
+
+Height+Width特征集:
+colsample_bytree: 0.8
+learning_rate: 0.1
+max_depth: 4
+min_child_weight: 1
+n_estimators: 100
+reg_alpha: 0.5
+reg_lambda: 1.0
+subsample: 0.8
+
+==================================================
+模型训练完成！总运行时间: 0:01:24
+结束时间: 2025-07-16 10:35:50
+详细日志已保存到: outputs/model_training_log_xgboost.txt
