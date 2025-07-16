@@ -95,7 +95,7 @@ X_train_dim, X_test_dim, y_train_dim, y_test_dim = train_test_split(
 )
 
 # 定义XGBoost参数网格
-# 缩减参数网格（示例）
+# 缩减版本的参数网格
 param_grid = {
     'n_estimators': [50, 100],  # 减少取值数量
     'learning_rate': [0.05, 0.1],
@@ -106,6 +106,20 @@ param_grid = {
     'reg_alpha': [0.5, 1.0],
     'reg_lambda': [0.5, 1.0]
 }
+
+'''
+# 扩大网格搜索范围之后，预测效果并没有更好
+param_grid = {
+    'n_estimators': [50, 100, 200],
+    'learning_rate': [0.01, 0.05, 0.1],
+    'max_depth': [2, 3, 4],
+    'min_child_weight': [1, 2, 3],
+    'subsample': [0.7, 0.8, 0.9],
+    'colsample_bytree': [0.7, 0.8, 0.9],
+    'reg_alpha': [0.1, 0.5, 1.0],
+    'reg_lambda': [0.1, 0.5, 1.0]
+}
+'''
 
 # 创建XGBoost模型
 xgb_model = xgb.XGBRegressor(objective='reg:squarederror', random_state=seed)
