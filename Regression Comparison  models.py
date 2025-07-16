@@ -1,7 +1,5 @@
 
 # 这个文件用来对比基于“aspect_ratio”与“Height和Width”的线性回归与多项式回归
-
-
 import pandas as pd
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.model_selection import train_test_split, KFold
@@ -87,11 +85,15 @@ print("数据准备完成:")
 print(f"- 特征集1 (aspect_ratio): {list(data_with_ratio.columns)}")
 print(f"- 特征集2 (Height+Width): {list(data_with_dim.columns)}")
 
-# 定义多项式阶数
-poly_degree = 2  # 可调整为2、3等
+# 定义多项式阶数列表
+poly_degrees = [2, 3]
 
-# 准备四种模型的数据
+# 准备模型数据
 datasets = {}
+models = {}
+predictions = {}
+results = {}
+model_names = {}
 
 # 数据集1: aspect_ratio + 线性回归
 X_ratio = data_with_ratio.drop('Experiment_mean(MPa)', axis=1)
@@ -99,91 +101,73 @@ y_ratio = data_with_ratio['Experiment_mean(MPa)']
 X_train_ratio, X_test_ratio, y_train_ratio, y_test_ratio = train_test_split(
     X_ratio, y_ratio, test_size=0.2, random_state=seed
 )
-datasets['ratio_linear'] = {
+key = 'ratio_linear'
+datasets[key] = {
     'X_train': X_train_ratio, 'X_test': X_test_ratio,
     'y_train': y_train_ratio, 'y_test': y_test_ratio
 }
+model_names[key] = 'Linear Regression (with aspect_ratio)'
 
-# 数据集2: aspect_ratio + 多项式回归
-poly_ratio = PolynomialFeatures(degree=poly_degree)
-X_train_poly_ratio = poly_ratio.fit_transform(X_train_ratio)
-X_test_poly_ratio = poly_ratio.transform(X_test_ratio)
-datasets['ratio_poly'] = {
-    'X_train': X_train_poly_ratio, 'X_test': X_test_poly_ratio,
-    'y_train': y_train_ratio, 'y_test': y_test_ratio
-}
-
-# 数据集3: Height+Width + 线性回归
+# 数据集2: Height+Width + 线性回归
 X_dim = data_with_dim.drop('Experiment_mean(MPa)', axis=1)
 y_dim = data_with_dim['Experiment_mean(MPa)']
 X_train_dim, X_test_dim, y_train_dim, y_test_dim = train_test_split(
     X_dim, y_dim, test_size=0.2, random_state=seed
 )
-datasets['dim_linear'] = {
+key = 'dim_linear'
+datasets[key] = {
     'X_train': X_train_dim, 'X_test': X_test_dim,
     'y_train': y_train_dim, 'y_test': y_test_dim
 }
+model_names[key] = 'Linear Regression (with Height+Width)'
 
-# 数据集4: Height+Width + 多项式回归
-poly_dim = PolynomialFeatures(degree=poly_degree)
-X_train_poly_dim = poly_dim.fit_transform(X_train_dim)
-X_test_poly_dim = poly_dim.transform(X_test_dim)
-datasets['dim_poly'] = {
-    'X_train': X_train_poly_dim, 'X_test': X_test_poly_dim,
-    'y_train': y_train_dim, 'y_test': y_test_dim
-}
+# 多项式回归数据集
+for degree in poly_degrees:
+    # aspect_ratio + 多项式回归
+    poly_ratio = PolynomialFeatures(degree=degree)
+    X_train_poly_ratio = poly_ratio.fit_transform(X_train_ratio)
+    X_test_poly_ratio = poly_ratio.transform(X_test_ratio)
+    key = f'ratio_poly_{degree}'
+    datasets[key] = {
+        'X_train': X_train_poly_ratio, 'X_test': X_test_poly_ratio,
+        'y_train': y_train_ratio, 'y_test': y_test_ratio
+    }
+    model_names[key] = f'Polynomial Regression(degree={degree}, with aspect_ratio)'
+
+    # Height+Width + 多项式回归
+    poly_dim = PolynomialFeatures(degree=degree)
+    X_train_poly_dim = poly_dim.fit_transform(X_train_dim)
+    X_test_poly_dim = poly_dim.transform(X_test_dim)
+    key = f'dim_poly_{degree}'
+    datasets[key] = {
+        'X_train': X_train_poly_dim, 'X_test': X_test_poly_dim,
+        'y_train': y_train_dim, 'y_test': y_test_dim
+    }
+    model_names[key] = f'Polynomial Regression(degree={degree}, with Height+Width)'
 
 print("\n数据集准备完成:")
 for key, data in datasets.items():
     print(f"- {key}: 训练集形状={data['X_train'].shape}, 测试集形状={data['X_test'].shape}")
 
-# 初始化并训练四种模型
-models = {}
-predictions = {}
+# 训练所有模型
+print("\n开始模型训练...")
+for key in datasets.keys():
+    print(f"\n训练 {model_names[key]}...")
+    if '_linear' in key:
+        # 线性回归
+        models[key] = LinearRegression()
+    else:
+        # 多项式回归使用Ridge回归防止过拟合
+        alpha = 1.0  # 正则化强度，可调整
+        models[key] = Ridge(alpha=alpha, random_state=seed)
 
-# 1. aspect_ratio + 线性回归
-print("\n1. 训练基于aspect_ratio的线性回归模型...")
-models['ratio_linear'] = LinearRegression()
-models['ratio_linear'].fit(datasets['ratio_linear']['X_train'], datasets['ratio_linear']['y_train'])
-predictions['ratio_linear'] = models['ratio_linear'].predict(datasets['ratio_linear']['X_test'])
-print("  模型训练完成！")
-
-# 2. aspect_ratio + 多项式回归
-print("2. 训练基于aspect_ratio的多项式回归模型...")
-# 使用Ridge回归处理多项式过拟合
-models['ratio_poly'] = Ridge(alpha=1.0, random_state=seed)
-models['ratio_poly'].fit(datasets['ratio_poly']['X_train'], datasets['ratio_poly']['y_train'])
-predictions['ratio_poly'] = models['ratio_poly'].predict(datasets['ratio_poly']['X_test'])
-print("  模型训练完成！")
-
-# 3. Height+Width + 线性回归
-print("3. 训练基于Height+Width的线性回归模型...")
-models['dim_linear'] = LinearRegression()
-models['dim_linear'].fit(datasets['dim_linear']['X_train'], datasets['dim_linear']['y_train'])
-predictions['dim_linear'] = models['dim_linear'].predict(datasets['dim_linear']['X_test'])
-print("  模型训练完成！")
-
-# 4. Height+Width + 多项式回归
-print("4. 训练基于Height+Width的多项式回归模型...")
-# 使用Ridge回归处理多项式过拟合
-models['dim_poly'] = Ridge(alpha=1.0, random_state=seed)
-models['dim_poly'].fit(datasets['dim_poly']['X_train'], datasets['dim_poly']['y_train'])
-predictions['dim_poly'] = models['dim_poly'].predict(datasets['dim_poly']['X_test'])
-print("  模型训练完成！")
-
-# 模型命名
-model_names = {
-    'ratio_linear': '线性回归(使用aspect_ratio)',
-    'ratio_poly': f'多项式回归(degree={poly_degree}, 使用aspect_ratio)',
-    'dim_linear': '线性回归(使用Height+Width)',
-    'dim_poly': f'多项式回归(degree={poly_degree}, 使用Height+Width)'
-}
+    models[key].fit(datasets[key]['X_train'], datasets[key]['y_train'])
+    predictions[key] = models[key].predict(datasets[key]['X_test'])
+    print(f"  {model_names[key]} 训练完成！")
 
 # 评估各模型
 print('\n各模型评估结果（保留4位小数）:')
 print('=' * 50)
-
-results = {}
 
 for key, y_pred in predictions.items():
     y_true = datasets[key]['y_test']
@@ -220,21 +204,29 @@ for key in ['ratio_linear', 'dim_linear']:
 # 多项式回归特征重要性（仅显示前10个）
 print("\n多项式回归特征重要性（绝对值前10）:")
 print("-" * 30)
-for key in ['ratio_poly', 'dim_poly']:
-    print(f"\n{model_names[key]}:")
-    model = models[key]
-    if key == 'ratio_poly':
-        feature_names = poly_ratio.get_feature_names_out(
-            input_features=list(datasets['ratio_linear']['X_train'].columns))
-    else:
-        feature_names = poly_dim.get_feature_names_out(input_features=list(datasets['dim_linear']['X_train'].columns))
+for key in list(datasets.keys()):
+    if '_poly_' in key:
+        print(f"\n{model_names[key]}:")
+        model = models[key]
+        degree = int(key.split('_')[-1])
 
-    # 获取特征重要性（系数绝对值）
-    importances = np.abs(model.coef_)
-    indices = np.argsort(importances)[-10:][::-1]  # 取前10个
+        # 获取已经fit过的PolynomialFeatures实例
+        if 'ratio' in key:
+            poly = PolynomialFeatures(degree=degree)
+            poly.fit(X_ratio)  # 先fit
+            feature_names = poly.get_feature_names_out(input_features=list(X_ratio.columns))
+        else:
+            poly = PolynomialFeatures(degree=degree)
+            poly.fit(X_dim)  # 先fit
+            feature_names = poly.get_feature_names_out(input_features=list(X_dim.columns))
 
-    for i in indices:
-        print(f"{feature_names[i]}: {importances[i]:.4f}")
+        # 获取特征重要性（系数绝对值）
+        importances = np.abs(model.coef_)
+        indices = np.argsort(importances)[-10:][::-1]  # 取前10个
+
+        for i in indices:
+            print(f"{feature_names[i]}: {importances[i]:.4f}")
+
 
 # 计算总运行时间
 end_time = time.time()
@@ -248,9 +240,13 @@ print(f"详细日志已保存到: {log_file}")
 sys.stdout = sys.__stdout__
 
 # 绘制各模型预测值与真实值的散点图
-plt.figure(figsize=(15, 10))
-for i, key in enumerate(predictions.keys(), 1):
-    plt.subplot(2, 2, i)
+plt.figure(figsize=(15, 15))
+keys = list(predictions.keys())
+num_models = len(keys)
+rows = (num_models + 2) // 3  # 每行3个图
+
+for i, key in enumerate(keys, 1):
+    plt.subplot(rows, 3, i)
     y_true = datasets[key]['y_test']
     y_pred = predictions[key]
     plt.scatter(y_true, y_pred)
@@ -263,31 +259,78 @@ plt.tight_layout()
 plt.savefig(os.path.join("Regression_Comparison", "model_comparison.png"), dpi=300)
 plt.show()
 
-# 绘制评估指标对比图
-metrics = ['MSE', 'R2', 'MAE', 'MedAE']
-plt.figure(figsize=(15, 10))
 
+# 绘制评估指标对比图（折线图）
+metrics = ['MSE', 'R2', 'MAE', 'MedAE']
+plt.figure(figsize=(16, 10))
+
+# 为每个模型设置颜色和标记
+colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
+markers = ['o', 's', '^', 'D', 'x', '*', 'p']
+
+# 绘制所有指标的折线图
 for i, metric in enumerate(metrics, 1):
     plt.subplot(2, 2, i)
-    values = [results[key][metric] for key in predictions.keys()]
-    bars = plt.bar([model_names[key] for key in predictions.keys()], values)
 
-    if metric == 'R2':
-        plt.ylim(0, 1)  # R2范围在0-1之间
+    # 为每个模型绘制折线
+    for j, key in enumerate(keys):
+        value = results[key][metric]
+        # 使用模型名称的简化版本作为标签
+        model_label = model_names[key].replace('Regression', '').replace('(with', '(').replace(')', '')
+        plt.plot(j, value, marker=markers[j], color=colors[j], markersize=8,
+                 label=model_label if i == 1 else "")  # 只在第一个子图显示图例
 
+    # 设置图表属性
     plt.title(f'Model {metric} Comparison')
     plt.ylabel(metric)
-    plt.xticks(rotation=45, ha='right')
+    plt.xticks(range(len(keys)), [f'M{i + 1}' for i in range(len(keys))], rotation=0)  # 使用M1,M2等简化x轴标签
 
     # 添加数值标签
-    for bar in bars:
-        height = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width() / 2., height,
-                 f'{height:.4f}',
-                 ha='center', va='bottom')
+    for j, key in enumerate(keys):
+        value = results[key][metric]
+        plt.annotate(f'{value:.4f}',
+                     (j, value),
+                     textcoords="offset points",
+                     xytext=(0, 10),
+                     ha='center',
+                     rotation=45 if metric == 'R2' else 0)  # R2指标标签旋转45度避免重叠
+
+    # 设置R2的y轴范围
+    if metric == 'R2':
+        plt.ylim(0, 1)
+
+    # 添加网格线
+    plt.grid(True, linestyle='--', alpha=0.7)
+
+# 调整布局并添加图例
+plt.tight_layout(rect=[0, 0, 0.85, 1])  # 为右侧的图例留出空间
+plt.figlegend(loc='center right', bbox_to_anchor=(1, 0.5),
+              title='Models', fontsize='medium')
+
+plt.savefig(os.path.join("Regression_Comparison", "metrics_comparison_line.png"), dpi=300, bbox_inches='tight')
+plt.show()
+
+# 绘制不同degree的多项式回归性能对比
+plt.figure(figsize=(15, 10))
+for feature_type in ['ratio', 'dim']:
+    linear_key = f'{feature_type}_linear'
+    poly_keys = [f'{feature_type}_poly_{d}' for d in poly_degrees]
+
+    for metric in ['MSE', 'R2']:
+        plt.subplot(2, 2, metrics.index(metric) + 1)
+        x_values = ['linear'] + [f'd={d}' for d in poly_degrees]
+        y_values = [results[linear_key][metric]] + [results[k][metric] for k in poly_keys]
+
+        label = 'with aspect_ratio' if feature_type == 'ratio' else 'with Height+Width'
+        plt.plot(x_values, y_values, 'o-', label=label)
+
+        plt.title(f'The influence of polynomial degree on {metric}')
+        plt.xlabel('Model complexity')
+        plt.ylabel(metric)
+        plt.legend()
 
 plt.tight_layout()
-plt.savefig(os.path.join("Regression_Comparison", "metrics_comparison.png"), dpi=300)
+plt.savefig(os.path.join("Regression_Comparison", "poly_degree_comparison.png"), dpi=300)
 plt.show()
 
 print("\n可视化图表已保存至: Regression_Comparison/")

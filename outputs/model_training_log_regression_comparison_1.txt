@@ -1,0 +1,116 @@
+开始模型训练，日志将保存到 outputs\model_training_log_regression_comparison_1.txt
+开始时间: 2025-07-16 05:35:40
+==================================================
+数据准备完成:
+- 特征集1 (aspect_ratio): ['printing_temperature', 'feed_rate', 'printing_speed', 'aspect_ratio', 'Experiment_mean(MPa)']
+- 特征集2 (Height+Width): ['printing_temperature', 'feed_rate', 'printing_speed', 'Height', 'Width', 'Experiment_mean(MPa)']
+
+数据集准备完成:
+- ratio_linear: 训练集形状=(38, 4), 测试集形状=(10, 4)
+- dim_linear: 训练集形状=(38, 5), 测试集形状=(10, 5)
+- ratio_poly_2: 训练集形状=(38, 15), 测试集形状=(10, 15)
+- dim_poly_2: 训练集形状=(38, 21), 测试集形状=(10, 21)
+- ratio_poly_3: 训练集形状=(38, 35), 测试集形状=(10, 35)
+- dim_poly_3: 训练集形状=(38, 56), 测试集形状=(10, 56)
+- ratio_poly_4: 训练集形状=(38, 70), 测试集形状=(10, 70)
+- dim_poly_4: 训练集形状=(38, 126), 测试集形状=(10, 126)
+
+开始模型训练...
+
+训练 线性回归(使用aspect_ratio)...
+  线性回归(使用aspect_ratio) 训练完成！
+
+训练 线性回归(使用Height+Width)...
+  线性回归(使用Height+Width) 训练完成！
+
+训练 多项式回归(degree=2, 使用aspect_ratio)...
+  多项式回归(degree=2, 使用aspect_ratio) 训练完成！
+
+训练 多项式回归(degree=2, 使用Height+Width)...
+  多项式回归(degree=2, 使用Height+Width) 训练完成！
+
+训练 多项式回归(degree=3, 使用aspect_ratio)...
+  多项式回归(degree=3, 使用aspect_ratio) 训练完成！
+
+训练 多项式回归(degree=3, 使用Height+Width)...
+  多项式回归(degree=3, 使用Height+Width) 训练完成！
+
+训练 多项式回归(degree=4, 使用aspect_ratio)...
+  多项式回归(degree=4, 使用aspect_ratio) 训练完成！
+
+训练 多项式回归(degree=4, 使用Height+Width)...
+  多项式回归(degree=4, 使用Height+Width) 训练完成！
+
+各模型评估结果（保留4位小数）:
+==================================================
+
+线性回归(使用aspect_ratio)评估：
+均方误差 (MSE): 1571.0053
+决定系数 (R2): 0.7796
+平均绝对误差 (MAE): 30.5318
+中位数绝对误差 (MedAE): 23.8984
+
+线性回归(使用Height+Width)评估：
+均方误差 (MSE): 1593.4871
+决定系数 (R2): 0.7765
+平均绝对误差 (MAE): 30.1353
+中位数绝对误差 (MedAE): 24.0603
+
+多项式回归(degree=2, 使用aspect_ratio)评估：
+均方误差 (MSE): 777.8165
+决定系数 (R2): 0.8909
+平均绝对误差 (MAE): 22.6557
+中位数绝对误差 (MedAE): 21.5916
+
+多项式回归(degree=2, 使用Height+Width)评估：
+均方误差 (MSE): 1473.8621
+决定系数 (R2): 0.7932
+平均绝对误差 (MAE): 29.8509
+中位数绝对误差 (MedAE): 22.2121
+
+多项式回归(degree=3, 使用aspect_ratio)评估：
+均方误差 (MSE): 4023.7404
+决定系数 (R2): 0.4356
+平均绝对误差 (MAE): 41.3724
+中位数绝对误差 (MedAE): 15.6494
+
+多项式回归(degree=3, 使用Height+Width)评估：
+均方误差 (MSE): 1135.9822
+决定系数 (R2): 0.8406
+平均绝对误差 (MAE): 27.5677
+中位数绝对误差 (MedAE): 29.4817
+
+多项式回归(degree=4, 使用aspect_ratio)评估：
+均方误差 (MSE): 1125.5981
+决定系数 (R2): 0.8421
+平均绝对误差 (MAE): 25.7210
+中位数绝对误差 (MedAE): 19.1001
+
+多项式回归(degree=4, 使用Height+Width)评估：
+均方误差 (MSE): 13498.1703
+决定系数 (R2): -0.8935
+平均绝对误差 (MAE): 53.7862
+中位数绝对误差 (MedAE): 20.1940
+
+线性回归模型系数:
+------------------------------
+
+线性回归(使用aspect_ratio):
+printing_temperature: -1.0308
+feed_rate: 10.5481
+printing_speed: 0.0132
+aspect_ratio: -73.6461
+截距: 306.1744
+
+线性回归(使用Height+Width):
+printing_temperature: -0.9623
+feed_rate: 11.3522
+printing_speed: 0.0124
+Height: -212.2499
+Width: 103.9294
+截距: 243.4356
+
+多项式回归特征重要性（绝对值前10）:
+------------------------------
+
+多项式回归(degree=2, 使用aspect_ratio):

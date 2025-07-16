@@ -1,0 +1,147 @@
+开始模型训练，日志将保存到 outputs\model_training_log_regression_comparison_5.txt
+开始时间: 2025-07-16 05:54:24
+==================================================
+数据准备完成:
+- 特征集1 (aspect_ratio): ['printing_temperature', 'feed_rate', 'printing_speed', 'aspect_ratio', 'Experiment_mean(MPa)']
+- 特征集2 (Height+Width): ['printing_temperature', 'feed_rate', 'printing_speed', 'Height', 'Width', 'Experiment_mean(MPa)']
+
+数据集准备完成:
+- ratio_linear: 训练集形状=(38, 4), 测试集形状=(10, 4)
+- dim_linear: 训练集形状=(38, 5), 测试集形状=(10, 5)
+- ratio_poly_2: 训练集形状=(38, 15), 测试集形状=(10, 15)
+- dim_poly_2: 训练集形状=(38, 21), 测试集形状=(10, 21)
+- ratio_poly_3: 训练集形状=(38, 35), 测试集形状=(10, 35)
+- dim_poly_3: 训练集形状=(38, 56), 测试集形状=(10, 56)
+
+开始模型训练...
+
+训练 Linear Regression (with aspect_ratio)...
+  Linear Regression (with aspect_ratio) 训练完成！
+
+训练 Linear Regression (with Height+Width)...
+  Linear Regression (with Height+Width) 训练完成！
+
+训练 Polynomial Regression(degree=2, with aspect_ratio)...
+  Polynomial Regression(degree=2, with aspect_ratio) 训练完成！
+
+训练 Polynomial Regression(degree=2, with Height+Width)...
+  Polynomial Regression(degree=2, with Height+Width) 训练完成！
+
+训练 Polynomial Regression(degree=3, with aspect_ratio)...
+  Polynomial Regression(degree=3, with aspect_ratio) 训练完成！
+
+训练 Polynomial Regression(degree=3, with Height+Width)...
+  Polynomial Regression(degree=3, with Height+Width) 训练完成！
+
+各模型评估结果（保留4位小数）:
+==================================================
+
+Linear Regression (with aspect_ratio)评估：
+均方误差 (MSE): 1571.0053
+决定系数 (R2): 0.7796
+平均绝对误差 (MAE): 30.5318
+中位数绝对误差 (MedAE): 23.8984
+
+Linear Regression (with Height+Width)评估：
+均方误差 (MSE): 1593.4871
+决定系数 (R2): 0.7765
+平均绝对误差 (MAE): 30.1353
+中位数绝对误差 (MedAE): 24.0603
+
+Polynomial Regression(degree=2, with aspect_ratio)评估：
+均方误差 (MSE): 777.8165
+决定系数 (R2): 0.8909
+平均绝对误差 (MAE): 22.6557
+中位数绝对误差 (MedAE): 21.5916
+
+Polynomial Regression(degree=2, with Height+Width)评估：
+均方误差 (MSE): 1473.8621
+决定系数 (R2): 0.7932
+平均绝对误差 (MAE): 29.8509
+中位数绝对误差 (MedAE): 22.2121
+
+Polynomial Regression(degree=3, with aspect_ratio)评估：
+均方误差 (MSE): 4023.7404
+决定系数 (R2): 0.4356
+平均绝对误差 (MAE): 41.3724
+中位数绝对误差 (MedAE): 15.6494
+
+Polynomial Regression(degree=3, with Height+Width)评估：
+均方误差 (MSE): 1135.9822
+决定系数 (R2): 0.8406
+平均绝对误差 (MAE): 27.5677
+中位数绝对误差 (MedAE): 29.4817
+
+线性回归模型系数:
+------------------------------
+
+Linear Regression (with aspect_ratio):
+printing_temperature: -1.0308
+feed_rate: 10.5481
+printing_speed: 0.0132
+aspect_ratio: -73.6461
+截距: 306.1744
+
+Linear Regression (with Height+Width):
+printing_temperature: -0.9623
+feed_rate: 11.3522
+printing_speed: 0.0124
+Height: -212.2499
+Width: 103.9294
+截距: 243.4356
+
+多项式回归特征重要性（绝对值前10）:
+------------------------------
+
+Polynomial Regression(degree=2, with aspect_ratio):
+feed_rate aspect_ratio: 11.0395
+feed_rate: 3.9456
+printing_temperature: 3.7514
+printing_speed: 1.2769
+printing_temperature aspect_ratio: 0.7043
+printing_speed aspect_ratio: 0.5329
+feed_rate^2: 0.3028
+aspect_ratio^2: 0.2130
+aspect_ratio: 0.2037
+printing_temperature feed_rate: 0.0274
+
+Polynomial Regression(degree=2, with Height+Width):
+printing_temperature Height: 16.1939
+feed_rate Height: 9.3661
+printing_temperature: 8.5930
+printing_temperature Width: 5.5006
+printing_speed Height: 3.5011
+feed_rate: 2.7971
+feed_rate Width: 2.1800
+printing_speed: 1.2834
+printing_speed Width: 0.8757
+feed_rate^2: 0.5389
+
+Polynomial Regression(degree=3, with aspect_ratio):
+printing_temperature aspect_ratio^2: 8.5228
+feed_rate^2: 7.1753
+printing_temperature feed_rate aspect_ratio: 4.5230
+printing_speed aspect_ratio: 2.3734
+printing_speed: 2.3438
+printing_temperature feed_rate: 2.3319
+feed_rate^2 aspect_ratio: 1.7998
+feed_rate aspect_ratio^2: 1.2686
+printing_speed aspect_ratio^2: 0.6176
+feed_rate printing_speed: 0.6128
+
+Polynomial Regression(degree=3, with Height+Width):
+printing_temperature feed_rate^2: 0.0217
+printing_temperature printing_speed Width: 0.0182
+feed_rate printing_speed Width: 0.0095
+printing_temperature printing_speed Height: 0.0075
+feed_rate printing_speed: 0.0063
+printing_temperature^2 Height: 0.0056
+printing_temperature^2 feed_rate: 0.0044
+printing_temperature^2 Width: 0.0043
+feed_rate^2 printing_speed: 0.0032
+printing_temperature^2: 0.0030
+
+==================================================
+模型训练完成！总运行时间: 0:00:00
+结束时间: 2025-07-16 05:54:24
+详细日志已保存到: outputs\model_training_log_regression_comparison_5.txt
