@@ -1,0 +1,52 @@
+开始模型训练，日志将保存到 outputs\RF_model_training_log3.0.txt
+开始时间: 2025-07-22 20:47:45
+==================================================
+数据准备完成:
+- 特征集1 (aspect_ratio): ['printing_temperature', 'feed_rate', 'printing_speed', 'aspect_ratio', 'Experiment_mean(MPa)']
+- 特征集2 (Height+Width): ['printing_temperature', 'feed_rate', 'printing_speed', 'Height', 'Width', 'Experiment_mean(MPa)']
+
+数据集划分完成:
+- aspect_ratio特征集: 训练集=(33, 4), 验证集=(7, 4), 测试集=(8, 4)
+- Height+Width特征集: 训练集=(33, 5), 验证集=(7, 5), 测试集=(8, 5)
+
+开始aspect_ratio特征集的GridSearchCV参数搜索...
+aspect_ratio特征集的RF模型训练完成！
+  最优参数: {'max_depth': 10, 'max_features': 'sqrt', 'min_samples_leaf': 1, 'min_samples_split': 2, 'n_estimators': 200}
+  验证集R²: 0.7719
+  测试集R²: 0.7450
+
+开始Height+Width特征集的GridSearchCV参数搜索...
+Height+Width特征集的RF模型训练完成！
+  最优参数: {'max_depth': None, 'max_features': 'sqrt', 'min_samples_leaf': 1, 'min_samples_split': 5, 'n_estimators': 50}
+  验证集R²: 0.8137
+  测试集R²: 0.6755
+
+模型评估结果（保留4位小数）:
+==================================================
+
+使用aspect_ratio特征的RF模型:
+验证集评估:
+  均方误差 (MSE): 1269.6910
+  决定系数 (R2): 0.7719
+测试集评估:
+  均方误差 (MSE): 1233.8304
+  决定系数 (R2): 0.7450
+  平均绝对误差 (MAE): 27.3208
+  中位数绝对误差 (MedAE): 23.0307
+
+使用Height+Width特征的RF模型:
+验证集评估:
+  均方误差 (MSE): 1037.2177
+  决定系数 (R2): 0.8137
+测试集评估:
+  均方误差 (MSE): 1570.5660
+  决定系数 (R2): 0.6755
+  平均绝对误差 (MAE): 26.4467
+  中位数绝对误差 (MedAE): 17.4712
+
+预测结果已导出至: prediction_results\rf_predictions.xlsx
+
+==================================================
+模型训练完成！总运行时间: 0:02:18
+结束时间: 2025-07-22 20:50:04
+详细日志已保存到: outputs\RF_model_training_log3.0.txt
