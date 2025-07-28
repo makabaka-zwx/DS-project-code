@@ -400,66 +400,130 @@
             // 显示结果状态
             showState('resultState');
         }
-
         // 更新x值分布图表
         function updateChart(data) {
             const ctx = document.getElementById('xValuesChart').getContext('2d');
 
-            // 如果图表已存在，销毁它
+            // 确保canvas上下文被正确清理
             if (xValuesChart) {
                 xValuesChart.destroy();
+                // 额外添加清理步骤
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             }
 
-            // 创建新图表
-            xValuesChart = new Chart(ctx, {
-                type: 'boxplot',
-                data: {
-                    labels: ['x1', 'x2', 'x3'],
-                    datasets: [{
-                        label: 'x值分布',
-                        data: [
-                            [data.ranges.x1.min, data.ranges.x1.max],
-                            [data.ranges.x2.min, data.ranges.x2.max],
-                            [data.ranges.x3.min, data.ranges.x3.max]
-                        ],
-                        backgroundColor: [
-                            'rgba(59, 130, 246, 0.2)',
-                            'rgba(16, 185, 129, 0.2)',
-                            'rgba(139, 92, 246, 0.2)'
-                        ],
-                        borderColor: [
-                            'rgba(59, 130, 246, 1)',
-                            'rgba(16, 185, 129, 1)',
-                            'rgba(139, 92, 246, 1)'
-                        ],
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            title: {
-                                display: true,
-                                text: '值'
+            // 检查Chart.js是否支持boxplot类型，如果不支持则使用散点图替代
+            if (!Chart.controllers.boxplot) {
+                // 使用散点图作为替代
+                xValuesChart = new Chart(ctx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [
+                            {
+                                label: 'x1值范围',
+                                data: [
+                                    {x: 1, y: data.ranges.x1.min},
+                                    {x: 1, y: data.ranges.x1.max}
+                                ],
+                                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                                pointRadius: 6
+                            },
+                            {
+                                label: 'x2值范围',
+                                data: [
+                                    {x: 2, y: data.ranges.x2.min},
+                                    {x: 2, y: data.ranges.x2.max}
+                                ],
+                                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                                pointRadius: 6
+                            },
+                            {
+                                label: 'x3值范围',
+                                data: [
+                                    {x: 3, y: data.ranges.x3.min},
+                                    {x: 3, y: data.ranges.x3.max}
+                                ],
+                                backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                                pointRadius: 6
                             }
-                        }
+                        ]
                     },
-                    plugins: {
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const index = context.dataIndex;
-                                    const values = context.raw;
-                                    return `${context.label}: ${values[0]} - ${values[1]}`;
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '变量'
+                                },
+                                ticks: {
+                                    callback: function(value) {
+                                        const labels = ['', 'x1', 'x2', 'x3'];
+                                        return labels[value];
+                                    }
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: '值'
                                 }
                             }
                         }
                     }
-                }
-            });
+                });
+            } else {
+                // 如果支持boxplot类型，则使用boxplot
+                xValuesChart = new Chart(ctx, {
+                    type: 'boxplot',
+                    data: {
+                        labels: ['x1', 'x2', 'x3'],
+                        datasets: [{
+                            label: 'x值分布',
+                            data: [
+                                [data.ranges.x1.min, data.ranges.x1.max],
+                                [data.ranges.x2.min, data.ranges.x2.max],
+                                [data.ranges.x3.min, data.ranges.x3.max]
+                            ],
+                            backgroundColor: [
+                                'rgba(59, 130, 246, 0.2)',
+                                'rgba(16, 185, 129, 0.2)',
+                                'rgba(139, 92, 246, 0.2)'
+                            ],
+                            borderColor: [
+                                'rgba(59, 130, 246, 1)',
+                                'rgba(16, 185, 129, 1)',
+                                'rgba(139, 92, 246, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                title: {
+                                    display: true,
+                                    text: '值'
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const index = context.dataIndex;
+                                        const values = context.raw;
+                                        return `${context.label}: ${values[0]} - ${values[1]}`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
         }
     </script>
 </body>
