@@ -238,9 +238,9 @@ param_grid = {
     'max_features': ['sqrt', 'log2']
 }
 
-# 定义要测试的种子值（原种子±4之内，共9次）
+# 定义要测试的种子值（原种子±20之内，9次）
 base_seed = 2520157
-seeds = [base_seed - 4 + i for i in range(9)]
+seeds = [base_seed - 4*5 + i*5 for i in range(9)]
 print(f"\n将使用以下种子进行实验: {seeds}")
 
 # 存储所有实验的结果
