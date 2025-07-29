@@ -69,9 +69,11 @@ def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name):
     print(f"初始变异概率: {MUTPB_INIT}")
     print(f"最终变异概率: {MUTPB_FINAL}")
 
-    # 定义遗传算法
-    creator.create("FitnessMax", base.Fitness, weights=(1.0,))  # 最大化适应度
-    creator.create("Individual", list, fitness=creator.FitnessMax)
+    # 定义遗传算法：多次重复调用时，仅在类不存在时创建
+    if "FitnessMax" not in creator.__dict__:  # 检查类是否已存在
+        creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+    if "Individual" not in creator.__dict__:
+        creator.create("Individual", list, fitness=creator.FitnessMax)
 
     # 定义参数范围和类型
     toolbox = base.Toolbox()
