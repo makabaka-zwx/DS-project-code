@@ -6,8 +6,8 @@ import joblib  # 用于加载 joblib 模型
 app = Flask(__name__)
 
 # 加载 joblib 模型
-model_ratio_path = os.path.join("../models", "ga_rf_ratio_model3.0.joblib")
-model_dim_path = os.path.join("../models", "ga_rf_dim_model3.0.joblib")
+model_ratio_path = os.path.join("../../models", "ga_rf_ratio_model3.0.joblib")
+model_dim_path = os.path.join("../../models", "ga_rf_dim_model3.0.joblib")
 
 # 加载模型
 try:
