@@ -238,9 +238,9 @@ param_grid = {
     'max_features': ['sqrt', 'log2']
 }
 
-# 定义要测试的种子值（原种子±20之内，9次）
+# 定义要测试的种子值（原种子±4之内，9次）
 base_seed = 2520157
-seeds = [base_seed - 4*5 + i*5 for i in range(9)]
+seeds = [base_seed - 4 + i for i in range(9)]
 print(f"\n将使用以下种子进行实验: {seeds}")
 
 # 存储所有实验的结果
@@ -459,7 +459,7 @@ plt.savefig(os.path.join("outputs", "RF_Intermediary_model_metrics_comparison.pn
 plt.show()
 
 # 导出所有预测结果和平均值到Excel
-output_file = get_unique_filename(os.path.join("prediction_results", "RF_Intermediary_mediation_analysis_predictions.xlsx"))
+output_file = get_unique_filename(os.path.join("prediction_results", "RF_Intermediary_analysis_predictions.xlsx"))
 with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
     # 导出每次实验的预测结果
     for exp_idx, predictions in enumerate(all_predictions):

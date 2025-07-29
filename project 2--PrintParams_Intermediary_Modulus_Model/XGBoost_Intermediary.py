@@ -216,7 +216,7 @@ os.makedirs("Regression_Comparison", exist_ok=True)
 start_time = time.time()
 
 # 生成唯一的日志文件名
-base_log_file = "xgb_mediation_effect_analysis_log.txt"
+base_log_file = "XGB_Intermediary_effect_analysis_log.txt"
 log_file = get_unique_filename(os.path.join("outputs", base_log_file))
 
 # 重定向输出流
@@ -396,39 +396,39 @@ plt.subplot(1, 3, 1)
 feature_importance_width = final_models['width'].feature_importances_
 feature_names = final_models['features']['predictors']
 plt.bar(feature_names, feature_importance_width)
-plt.xlabel('打印参数')
-plt.ylabel('重要性')
-plt.title('打印参数对宽度的影响重要性')
+plt.xlabel('Print Parameters')
+plt.ylabel('Importance')
+plt.title('The Importance of the impact of Print Parameters on Width')
 plt.xticks(rotation=45)
 
 # 2. 打印参数对高度的影响
 plt.subplot(1, 3, 2)
 feature_importance_height = final_models['height'].feature_importances_
 plt.bar(feature_names, feature_importance_height)
-plt.xlabel('打印参数')
-plt.ylabel('重要性')
-plt.title('打印参数对高度的影响重要性')
+plt.xlabel('Print Parameters')
+plt.ylabel('Importance')
+plt.title('The Importance of the impact of Print Parameters on Height')
 plt.xticks(rotation=45)
 
 # 3. 宽高对机械模量的影响
 plt.subplot(1, 3, 3)
 feature_importance_mediation = final_models['mediation'].feature_importances_
-feature_names_mediation = ['预测宽度', '预测高度']
+feature_names_mediation = ['Prediction Width', 'Prediction Height']
 plt.bar(feature_names_mediation, feature_importance_mediation)
-plt.xlabel('中介变量')
-plt.ylabel('重要性')
-plt.title('宽高对机械模量的影响重要性')
+plt.xlabel('mediator')
+plt.ylabel('Importance')
+plt.title('The Importance of the influence of Width and Height on Mechanical Modulus')
 plt.xticks(rotation=45)
 
 plt.tight_layout()
-plt.savefig(os.path.join("Regression_Comparison", "xgb_mediation_feature_importance.png"), dpi=300)
+plt.savefig(os.path.join("Regression_Comparison", "XGB_Intermediary_feature_importance.png"), dpi=300)
 plt.show()
 
 # 绘制三种模型的预测值与真实值对比
 plt.figure(figsize=(18, 6))
 
 model_types = ['mediation', 'direct', 'hybrid']
-model_names = ['中介模型', '直接模型', '混合模型']
+model_names = ['Mediated Model', 'Direct Model', 'Mixed Model']
 
 for i, (model_type, name) in enumerate(zip(model_types, model_names), 1):
     plt.subplot(1, 3, i)
@@ -438,21 +438,21 @@ for i, (model_type, name) in enumerate(zip(model_types, model_names), 1):
     y_pred = all_predictions[-1][model_type]['test']['y_pred']
 
     plt.scatter(y_true, y_pred, alpha=0.7)
-    plt.xlabel('真实值')
-    plt.ylabel('预测值')
+    plt.xlabel('True Values')
+    plt.ylabel('Predicted Values')
     r2 = all_results[-1][model_type]['test']['R2']
-    plt.title(f'{name} - 真实值 vs 预测值 (R²={r2:.4f})')
+    plt.title(f'{name} - True Values vs Predicted Values (R²={r2:.4f})')
     plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'r--')
     plt.grid(alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(os.path.join("Regression_Comparison", "xgb_model_comparison_scatter.png"), dpi=300)
+plt.savefig(os.path.join("Regression_Comparison", "XGB_Intermediary_model_comparison_scatter.png"), dpi=300)
 plt.show()
 
 # 绘制三种模型的评估指标对比
 metrics = ['MSE', 'R2', 'MAE', 'MedAE']
 model_types = ['mediation', 'direct', 'hybrid']
-model_names = ['中介模型', '直接模型', '混合模型']
+model_names = ['Mediated Model', 'Direct Model', 'Mixed Model']
 
 plt.figure(figsize=(16, 10))
 
@@ -462,7 +462,7 @@ for i, metric in enumerate(metrics, 1):
     values = [average_results[mt]['test'][metric] for mt in model_types]
     plt.bar(model_names, values, color=['#1f77b4', '#ff7f0e', '#2ca02c'])
 
-    plt.title(f'模型{metric}对比')
+    plt.title(f'Model {metric} Comparison')
     plt.ylabel(metric)
 
     # 添加数值标签
@@ -476,11 +476,11 @@ for i, metric in enumerate(metrics, 1):
     plt.grid(axis='y', alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(os.path.join("Regression_Comparison", "xgb_model_metrics_comparison.png"), dpi=300)
+plt.savefig(os.path.join("Regression_Comparison", "XGB_Intermediary_model_metrics_comparison.png"), dpi=300)
 plt.show()
 
 # 导出所有预测结果和平均值到Excel
-output_file = get_unique_filename(os.path.join("prediction_results", "xgb_mediation_analysis_predictions.xlsx"))
+output_file = get_unique_filename(os.path.join("prediction_results", "XGB_Intermediary_analysis_predictions.xlsx"))
 with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
     # 导出每次实验的预测结果
     for exp_idx, predictions in enumerate(all_predictions):
