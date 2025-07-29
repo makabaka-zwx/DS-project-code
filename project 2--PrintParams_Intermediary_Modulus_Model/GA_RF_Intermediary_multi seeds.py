@@ -1,21 +1,22 @@
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error, median_absolute_error
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import time
-from datetime import timedelta
 import os
 import random
+import openpyxl
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error, median_absolute_error
 from deap import base, creator, tools, algorithms
-import joblib  # 用于模型序列化
-import openpyxl  # 用于Excel文件操作
+import joblib
+from datetime import timedelta
 
-seed = 2520157  # 随机种子
-np.random.seed(seed)
-random.seed(seed)
+# 定义种子范围（与RF版本保持一致：基础种子±4，共9个种子）
+base_seed = 2520157
+seeds = [base_seed - 4 + i for i in range(9)]
+print(f"将使用以下种子进行实验: {seeds}")
 
 
 class Logger:
@@ -51,8 +52,8 @@ def get_unique_filename(base_name):
         counter += 1
 
 
-def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name):
-    """使用遗传算法优化并训练随机森林模型"""
+def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name, seed):
+    """使用遗传算法优化并训练随机森林模型（新增seed参数）"""
     # 遗传算法参数设置
     POPULATION_SIZE = 50  # 种群大小
     NGEN = 15  # 迭代代数
@@ -77,11 +78,13 @@ def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name):
 
     # 定义参数范围和类型
     toolbox = base.Toolbox()
-    toolbox.register("n_estimators", random.randint, 50, 200)  # 决策树数量
-    toolbox.register("max_depth", lambda: random.choice([None, 5, 10, 15, 20]))  # max_depth的可能取值
-    toolbox.register("min_samples_split", random.randint, 2, 10)  # 最小分割样本数
-    toolbox.register("min_samples_leaf", random.randint, 1, 4)  # 最小叶子节点样本数
-    toolbox.register("max_features", lambda: random.choice(['sqrt', 'log2', None]))  # 最大特征数
+    # 使用当前种子初始化随机数生成器
+    toolbox.register("random", random.Random, seed)
+    toolbox.register("n_estimators", toolbox.random.randint, 50, 200)  # 决策树数量
+    toolbox.register("max_depth", lambda: toolbox.random.choice([None, 5, 10, 15, 20]))  # max_depth的可能取值
+    toolbox.register("min_samples_split", toolbox.random.randint, 2, 10)  # 最小分割样本数
+    toolbox.register("min_samples_leaf", toolbox.random.randint, 1, 4)  # 最小叶子节点样本数
+    toolbox.register("max_features", lambda: toolbox.random.choice(['sqrt', 'log2', None]))  # 最大特征数
 
     # 创建个体和种群
     toolbox.register("individual", tools.initCycle, creator.Individual,
@@ -94,7 +97,7 @@ def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name):
     def evalRF(individual):
         n_est, max_d, min_split, min_leaf, max_feat = individual
 
-        # 创建创建随机森林模型
+        # 创建随机森林模型（使用当前种子）
         rf = RandomForestRegressor(
             n_estimators=n_est,
             max_depth=max_d,
@@ -122,17 +125,17 @@ def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name):
     # 注册遗传操作，自定义变异操作处理max_depth
     def custom_mutate(individual):
         for i in range(len(individual)):
-            if random.random() < MUTPB_INIT:  # 使用初始变异概率作为基准
+            if toolbox.random.random() < MUTPB_INIT:  # 使用工具类的随机数生成器
                 if i == 1:  # 针对max_depth的处理
-                    individual[i] = random.choice([None, 5, 10, 15, 20])
+                    individual[i] = toolbox.random.choice([None, 5, 10, 15, 20])
                 elif i == 0:  # n_estimators
-                    individual[i] = random.randint(50, 300)
+                    individual[i] = toolbox.random.randint(50, 300)
                 elif i == 2:  # min_samples_split
-                    individual[i] = random.randint(2, 10)
+                    individual[i] = toolbox.random.randint(2, 10)
                 elif i == 3:  # min_samples_leaf
-                    individual[i] = random.randint(1, 4)
+                    individual[i] = toolbox.random.randint(1, 4)
                 elif i == 4:  # max_features
-                    individual[i] = random.choice(['sqrt', 'log2', None])
+                    individual[i] = toolbox.random.choice(['sqrt', 'log2', None])
         return individual,
 
     toolbox.register("evaluate", evalRF)
@@ -177,13 +180,13 @@ def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name):
 
         # 应用交叉和变异
         for child1, child2 in zip(offspring[::2], offspring[1::2]):
-            if random.random() < cxpb:
+            if toolbox.random.random() < cxpb:  # 使用工具类的随机数生成器
                 toolbox.mate(child1, child2)
                 del child1.fitness.values
                 del child2.fitness.values
 
         for mutant in offspring:
-            if random.random() < mutpb:
+            if toolbox.random.random() < mutpb:  # 使用工具类的随机数生成器
                 toolbox.mutate(mutant)
                 del mutant.fitness.values
 
@@ -208,7 +211,7 @@ def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name):
           f"min_samples_split={best_params[2]}, min_samples_leaf={best_params[3]}, "
           f"max_features={best_params[4]}")
 
-    # 使用最优参数创建并训练随机森林模型
+    # 使用最优参数创建并训练随机森林模型（使用当前种子）
     ga_rf = RandomForestRegressor(
         n_estimators=best_params[0],
         max_depth=best_params[1],
@@ -225,16 +228,165 @@ def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name):
     return ga_rf, best_params
 
 
+def run_ga_mediation_experiment(seed, data):
+    """运行单次GA-RF中介效应实验"""
+    # 设置当前实验种子
+    np.random.seed(seed)
+    random.seed(seed)
+
+    # 定义变量
+    predictors = ['printing_temperature', 'feed_rate', 'printing_speed']  # 打印参数
+    mediators = ['Height', 'Width']  # 中介变量
+    target = 'Experiment_mean(MPa)'  # 最终目标变量
+
+    # 数据集划分：训练集(70%)、验证集(15%)、测试集(15%)
+    train_val, test = train_test_split(data, test_size=0.3, random_state=seed)
+    train, val = train_test_split(train_val, test_size=0.5, random_state=seed)
+
+    # 1.1 训练宽高预测模型
+    model_width, params_width = train_ga_rf(
+        train[predictors], train['Width'],
+        val[predictors], val['Width'],
+        "Width_Predictor",
+        seed  # 传入当前种子
+    )
+
+    model_height, params_height = train_ga_rf(
+        train[predictors], train['Height'],
+        val[predictors], val['Height'],
+        "Height_Predictor",
+        seed  # 传入当前种子
+    )
+
+    # 生成预测的宽高特征
+    train_pred_width = model_width.predict(train[predictors])
+    train_pred_height = model_height.predict(train[predictors])
+    train_mediation_features = pd.DataFrame({
+        'predicted_width': train_pred_width,
+        'predicted_height': train_pred_height
+    })
+
+    val_pred_width = model_width.predict(val[predictors])
+    val_pred_height = model_height.predict(val[predictors])
+    val_mediation_features = pd.DataFrame({
+        'predicted_width': val_pred_width,
+        'predicted_height': val_pred_height
+    })
+
+    test_pred_width = model_width.predict(test[predictors])
+    test_pred_height = model_height.predict(test[predictors])
+    test_mediation_features = pd.DataFrame({
+        'predicted_width': test_pred_width,
+        'predicted_height': test_pred_height
+    })
+
+    # 1.2 训练中介模型
+    model_mediation, params_mediation = train_ga_rf(
+        train_mediation_features, train[target],
+        val_mediation_features, val[target],
+        "Mediation_Model",
+        seed  # 传入当前种子
+    )
+
+    # 2. 训练直接模型
+    model_direct, params_direct = train_ga_rf(
+        train[predictors], train[target],
+        val[predictors], val[target],
+        "Direct_Model",
+        seed  # 传入当前种子
+    )
+
+    # 3. 训练混合模型
+    hybrid_features = predictors + mediators
+    model_hybrid, params_hybrid = train_ga_rf(
+        train[hybrid_features], train[target],
+        val[hybrid_features], val[target],
+        "Hybrid_Model",
+        seed  # 传入当前种子
+    )
+
+    # 模型预测
+    y_pred_val_mediation = model_mediation.predict(val_mediation_features)
+    y_pred_test_mediation = model_mediation.predict(test_mediation_features)
+
+    y_pred_val_direct = model_direct.predict(val[predictors])
+    y_pred_test_direct = model_direct.predict(test[predictors])
+
+    y_pred_val_hybrid = model_hybrid.predict(val[hybrid_features])
+    y_pred_test_hybrid = model_hybrid.predict(test[hybrid_features])
+
+    # 计算评估指标
+    results = {
+        'mediation': {
+            'val': {
+                'MSE': mean_squared_error(val[target], y_pred_val_mediation),
+                'R2': r2_score(val[target], y_pred_val_mediation)
+            },
+            'test': {
+                'MSE': mean_squared_error(test[target], y_pred_test_mediation),
+                'R2': r2_score(test[target], y_pred_test_mediation),
+                'MAE': mean_absolute_error(test[target], y_pred_test_mediation),
+                'MedAE': median_absolute_error(test[target], y_pred_test_mediation)
+            }
+        },
+        'direct': {
+            'val': {
+                'MSE': mean_squared_error(val[target], y_pred_val_direct),
+                'R2': r2_score(val[target], y_pred_val_direct)
+            },
+            'test': {
+                'MSE': mean_squared_error(test[target], y_pred_test_direct),
+                'R2': r2_score(test[target], y_pred_test_direct),
+                'MAE': mean_absolute_error(test[target], y_pred_test_direct),
+                'MedAE': median_absolute_error(test[target], y_pred_test_direct)
+            }
+        },
+        'hybrid': {
+            'val': {
+                'MSE': mean_squared_error(val[target], y_pred_val_hybrid),
+                'R2': r2_score(val[target], y_pred_val_hybrid)
+            },
+            'test': {
+                'MSE': mean_squared_error(test[target], y_pred_test_hybrid),
+                'R2': r2_score(test[target], y_pred_test_hybrid),
+                'MAE': mean_absolute_error(test[target], y_pred_test_hybrid),
+                'MedAE': median_absolute_error(test[target], y_pred_test_hybrid)
+            }
+        }
+    }
+
+    # 保存预测结果和模型
+    predictions = {
+        'mediation': {'val': {'y_true': val[target], 'y_pred': y_pred_val_mediation},
+                      'test': {'y_true': test[target], 'y_pred': y_pred_test_mediation}},
+        'direct': {'val': {'y_true': val[target], 'y_pred': y_pred_val_direct},
+                   'test': {'y_true': test[target], 'y_pred': y_pred_test_direct}},
+        'hybrid': {'val': {'y_true': val[target], 'y_pred': y_pred_val_hybrid},
+                   'test': {'y_true': test[target], 'y_pred': y_pred_test_hybrid}}
+    }
+
+    models = {
+        'width': model_width,
+        'height': model_height,
+        'mediation': model_mediation,
+        'direct': model_direct,
+        'hybrid': model_hybrid,
+        'features': {'predictors': predictors, 'mediators': mediators, 'hybrid': hybrid_features}
+    }
+
+    return results, predictions, models, test
+
+
 # 创建输出目录
-os.makedirs("outputs", exist_ok=True)  # 日志与图片的保存目录
-os.makedirs("models", exist_ok=True)  # 模型保存目录
-os.makedirs("prediction_results", exist_ok=True)  # 预测结果保存目录
+os.makedirs("outputs", exist_ok=True)
+os.makedirs("models", exist_ok=True)
+os.makedirs("prediction_results", exist_ok=True)
 
 # 开始计时
 start_time = time.time()
 
 # 生成唯一的日志文件名
-base_log_file = "GA_RF_Intermediary_model_log.txt"
+base_log_file = "GA_RF_Intermediary(multi seeds)_model_log.txt"
 log_file = get_unique_filename(os.path.join("outputs", base_log_file))
 
 # 重定向输出流
@@ -244,7 +396,7 @@ print(f"开始中介效应GA-RF模型分析，日志将保存到 {log_file}")
 print(f"开始时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 print("=" * 50)
 
-# 加载数据 - 不考虑aspect_ratio
+# 加载数据
 data = pd.read_csv('./data_FEA_ANN_FEA-ANN.csv')
 selected_columns = ['printing_temperature', 'feed_rate', 'printing_speed', 'Height', 'Width', 'Experiment_mean(MPa)']
 data = data[selected_columns]
@@ -252,223 +404,126 @@ data = data[selected_columns]
 print("数据准备完成:")
 print(f"- 包含的特征: {list(data.columns)}")
 print(f"- 打印参数(自变量): ['printing_temperature', 'feed_rate', 'printing_speed']")
-print(f"- 中介变量(同时作为因变量): ['Height', 'Width']")
+print(f"- 中介变量: ['Height', 'Width']")
 print(f"- 目标变量: 'Experiment_mean(MPa)'")
 
-# 定义变量
-predictors = ['printing_temperature', 'feed_rate', 'printing_speed']  # 打印参数
-mediators = ['Height', 'Width']  # 中介变量
-target = 'Experiment_mean(MPa)'  # 最终目标变量
+# 存储所有实验结果
+all_results = []
+all_predictions = []
+final_models = None
+test_data = None
 
-# 数据集划分：训练集(70%)、验证集(15%)、测试集(15%)
-# 先划分为训练集和临时集(30%)
-train_data, temp_data = train_test_split(data, test_size=0.3, random_state=seed)
-# 再将临时集划分为验证集和测试集(各15%)
-val_data, test_data = train_test_split(temp_data, test_size=0.5, random_state=seed)
+# 运行多次实验（与RF版本保持一致的9次实验）
+for i, seed in enumerate(seeds):
+    print(f"\n{'=' * 30}")
+    print(f"开始第 {i + 1}/{len(seeds)} 次实验，种子值: {seed}")
+    print(f"{'=' * 30}")
 
-print("\n数据集划分完成:")
-print(f"- 训练集样本数: {len(train_data)} ({len(train_data) / len(data):.1%})")
-print(f"- 验证集样本数: {len(val_data)} ({len(val_data) / len(data):.1%})")
-print(f"- 测试集样本数: {len(test_data)} ({len(test_data) / len(data):.1%})")
+    results, predictions, models, test = run_ga_mediation_experiment(seed, data)
+    all_results.append(results)
+    all_predictions.append(predictions)
 
-# --------------------------
-# 1. 中介模型：打印参数 → 宽高 → 机械模量
-# --------------------------
+    # 保存最后一次实验的模型和测试数据用于可视化
+    if i == len(seeds) - 1:
+        final_models = models
+        test_data = test
 
-# 1.1 第一步：用打印参数预测宽和高（将宽和高作为因变量）
-print("\n" + "=" * 50)
-print("1. 训练中介变量预测模型 (打印参数 → 宽高)")
-print("-" * 50)
+    # 输出本次实验的评估结果
+    print(f"\n第 {i + 1} 次实验评估结果（保留4位小数）:")
+    print(f"中介模型 - 测试集R²: {results['mediation']['test']['R2']:.4f}")
+    print(f"直接模型 - 测试集R²: {results['direct']['test']['R2']:.4f}")
+    print(f"混合模型 - 测试集R²: {results['hybrid']['test']['R2']:.4f}")
 
-# 预测宽度的模型
-width_predictor_name = "Width_Predictor"
-model_width, params_width = train_ga_rf(
-    train_data[predictors], train_data['Width'],
-    val_data[predictors], val_data['Width'],
-    width_predictor_name
-)
 
-# 预测高度的模型
-height_predictor_name = "Height_Predictor"
-model_height, params_height = train_ga_rf(
-    train_data[predictors], train_data['Height'],
-    val_data[predictors], val_data['Height'],
-    height_predictor_name
-)
+# 计算所有实验的平均值（复用RF版本的计算逻辑）
+def calculate_averages(results_list):
+    avg_results = {
+        'mediation': {
+            'val': {'MSE': [], 'R2': []},
+            'test': {'MSE': [], 'R2': [], 'MAE': [], 'MedAE': []}
+        },
+        'direct': {
+            'val': {'MSE': [], 'R2': []},
+            'test': {'MSE': [], 'R2': [], 'MAE': [], 'MedAE': []}
+        },
+        'hybrid': {
+            'val': {'MSE': [], 'R2': []},
+            'test': {'MSE': [], 'R2': [], 'MAE': [], 'MedAE': []}
+        }
+    }
 
-# 1.2 第二步：用预测的宽高预测机械模量（中介模型）
-print("\n" + "=" * 50)
-print("2. 训练中介模型 (预测的宽高 → 机械模量)")
-print("-" * 50)
+    for res in results_list:
+        for model_type in ['mediation', 'direct', 'hybrid']:
+            for dataset_type in ['val', 'test']:
+                for metric in avg_results[model_type][dataset_type]:
+                    if metric in res[model_type][dataset_type]:
+                        avg_results[model_type][dataset_type][metric].append(
+                            res[model_type][dataset_type][metric])
 
-# 使用预测的宽高作为特征来训练最终模型
-# 生成训练集的预测宽高
-train_pred_width = model_width.predict(train_data[predictors])
-train_pred_height = model_height.predict(train_data[predictors])
+    for model_type in ['mediation', 'direct', 'hybrid']:
+        for dataset_type in ['val', 'test']:
+            for metric in avg_results[model_type][dataset_type]:
+                avg_results[model_type][dataset_type][metric] = np.mean(
+                    avg_results[model_type][dataset_type][metric])
 
-train_mediation_features = pd.DataFrame({
-    'predicted_width': train_pred_width,
-    'predicted_height': train_pred_height
-})
+    return avg_results
 
-# 生成验证集的预测宽高
-val_pred_width = model_width.predict(val_data[predictors])
-val_pred_height = model_height.predict(val_data[predictors])
 
-val_mediation_features = pd.DataFrame({
-    'predicted_width': val_pred_width,
-    'predicted_height': val_pred_height
-})
+average_results = calculate_averages(all_results)
 
-# 训练中介模型
-mediation_model_name = "Mediation_Model"
-model_mediation, params_mediation = train_ga_rf(
-    train_mediation_features, train_data[target],
-    val_mediation_features, val_data[target],
-    mediation_model_name
-)
+# 输出平均值结果
+print('\n' + '=' * 50)
+print("多次实验的平均评估结果（保留4位小数）:")
+print('=' * 50)
 
-# --------------------------
-# 2. 直接模型：打印参数直接预测机械模量
-# --------------------------
-print("\n" + "=" * 50)
-print("3. 训练直接模型 (打印参数 → 机械模量)")
-print("-" * 50)
+for model_type, model_name in [
+    ('mediation', '中介模型 (打印参数→宽高→机械模量)'),
+    ('direct', '直接模型 (打印参数直接→机械模量)'),
+    ('hybrid', '混合模型 (打印参数+宽高→机械模量)')
+]:
+    print(f"\n{model_name}:")
+    print("验证集平均评估:")
+    print(f"  均方误差 (MSE): {average_results[model_type]['val']['MSE']:.4f}")
+    print(f"  决定系数 (R2): {average_results[model_type]['val']['R2']:.4f}")
+    print("测试集平均评估:")
+    print(f"  均方误差 (MSE): {average_results[model_type]['test']['MSE']:.4f}")
+    print(f"  决定系数 (R2): {average_results[model_type]['test']['R2']:.4f}")
+    print(f"  平均绝对误差 (MAE): {average_results[model_type]['test']['MAE']:.4f}")
+    print(f"  中位数绝对误差 (MedAE): {average_results[model_type]['test']['MedAE']:.4f}")
 
-direct_model_name = "Direct_Model"
-model_direct, params_direct = train_ga_rf(
-    train_data[predictors], train_data[target],
-    val_data[predictors], val_data[target],
-    direct_model_name
-)
 
-# --------------------------
-# 3. 混合模型：打印参数 + 实际宽高预测机械模量（作为参考）
-# --------------------------
-print("\n" + "=" * 50)
-print("4. 训练混合模型 (打印参数 + 实际宽高 → 机械模量)")
-print("-" * 50)
+# 中介效应分析（复用RF版本的计算逻辑）
+def calculate_mediation_effect(average_results):
+    total_effect = average_results['direct']['test']['R2']
+    direct_effect = average_results['hybrid']['test']['R2'] - average_results['mediation']['test']['R2']
+    mediation_effect = total_effect - direct_effect
+    mediation_ratio = mediation_effect / total_effect if total_effect != 0 else 0
 
-hybrid_features = predictors + mediators
-hybrid_model_name = "Hybrid_Model"
-model_hybrid, params_hybrid = train_ga_rf(
-    train_data[hybrid_features], train_data[target],
-    val_data[hybrid_features], val_data[target],
-    hybrid_model_name
-)
+    return {
+        'total_effect': total_effect,
+        'direct_effect': direct_effect,
+        'mediation_effect': mediation_effect,
+        'mediation_ratio': mediation_ratio
+    }
 
-# 保存所有模型
-model_width_path = os.path.join("models", "ga_rf_width_predictor.joblib")
-model_height_path = os.path.join("models", "ga_rf_height_predictor.joblib")
-model_mediation_path = os.path.join("models", "ga_rf_mediation_model.joblib")
-model_direct_path = os.path.join("models", "ga_rf_direct_model.joblib")
-model_hybrid_path = os.path.join("models", "ga_rf_hybrid_model.joblib")
 
-joblib.dump(model_width, model_width_path)
-joblib.dump(model_height, model_height_path)
-joblib.dump(model_mediation, model_mediation_path)
-joblib.dump(model_direct, model_direct_path)
-joblib.dump(model_hybrid, model_hybrid_path)
+mediation_stats = calculate_mediation_effect(average_results)
 
-print(f"\n模型已保存至:")
-print(f"- 宽度预测模型: {model_width_path}")
-print(f"- 高度预测模型: {model_height_path}")
-print(f"- 中介模型: {model_mediation_path}")
-print(f"- 直接模型: {model_direct_path}")
-print(f"- 混合模型: {model_hybrid_path}")
+print('\n' + '=' * 50)
+print("中介效应分析结果:")
+print('=' * 50)
+print(f"总效应 (直接模型R²): {mediation_stats['total_effect']:.4f}")
+print(f"直接效应 (控制宽高后): {mediation_stats['direct_effect']:.4f}")
+print(f"中介效应 (通过宽高): {mediation_stats['mediation_effect']:.4f}")
+print(f"中介比例 (中介效应/总效应): {mediation_stats['mediation_ratio']:.2%}")
 
-# 在测试集上评估所有模型
-print("\n" + "=" * 50)
-print("5. 模型测试集评估结果")
-print("-" * 50)
-
-# 生成测试集的预测宽高（用于中介模型）
-test_pred_width = model_width.predict(test_data[predictors])
-test_pred_height = model_height.predict(test_data[predictors])
-
-test_mediation_features = pd.DataFrame({
-    'predicted_width': test_pred_width,
-    'predicted_height': test_pred_height
-})
-
-# 各模型预测
-y_pred_mediation = model_mediation.predict(test_mediation_features)
-y_pred_direct = model_direct.predict(test_data[predictors])
-y_pred_hybrid = model_hybrid.predict(test_data[hybrid_features])
-
-y_true = test_data[target]
-
-# 评估中介模型
-results_mediation = {
-    'MSE': mean_squared_error(y_true, y_pred_mediation),
-    'R2': r2_score(y_true, y_pred_mediation),
-    'MAE': mean_absolute_error(y_true, y_pred_mediation),
-    'MedAE': median_absolute_error(y_true, y_pred_mediation)
-}
-
-# 评估直接模型
-results_direct = {
-    'MSE': mean_squared_error(y_true, y_pred_direct),
-    'R2': r2_score(y_true, y_pred_direct),
-    'MAE': mean_absolute_error(y_true, y_pred_direct),
-    'MedAE': median_absolute_error(y_true, y_pred_direct)
-}
-
-# 评估混合模型
-results_hybrid = {
-    'MSE': mean_squared_error(y_true, y_pred_hybrid),
-    'R2': r2_score(y_true, y_pred_hybrid),
-    'MAE': mean_absolute_error(y_true, y_pred_hybrid),
-    'MedAE': median_absolute_error(y_true, y_pred_hybrid)
-}
-
-# 输出评估结果
-print("\n中介模型评估:")
-print(f"  均方误差 (MSE): {results_mediation['MSE']:.4f}")
-print(f"  决定系数 (R2): {results_mediation['R2']:.4f}")
-print(f"  平均绝对误差 (MAE): {results_mediation['MAE']:.4f}")
-print(f"  中位数绝对误差 (MedAE): {results_mediation['MedAE']:.4f}")
-
-print("\n直接模型评估:")
-print(f"  均方误差 (MSE): {results_direct['MSE']:.4f}")
-print(f"  决定系数 (R2): {results_direct['R2']:.4f}")
-print(f"  平均绝对误差 (MAE): {results_direct['MAE']:.4f}")
-print(f"  中位数绝对误差 (MedAE): {results_direct['MedAE']:.4f}")
-
-print("\n混合模型评估:")
-print(f"  均方误差 (MSE): {results_hybrid['MSE']:.4f}")
-print(f"  决定系数 (R2): {results_hybrid['R2']:.4f}")
-print(f"  平均绝对误差 (MAE): {results_hybrid['MAE']:.4f}")
-print(f"  中位数绝对误差 (MedAE): {results_hybrid['MedAE']:.4f}")
-
-# 中介效应分析
-print("\n" + "=" * 50)
-print("6. 中介效应分析结果")
-print("-" * 50)
-
-# 提取关键模型的R²值
-med_r2 = results_mediation['R2']  # 中介模型
-dir_r2 = results_direct['R2']  # 直接模型
-hyb_r2 = results_hybrid['R2']  # 混合模型
-
-# 计算中介效应比例
-total_effect = dir_r2
-direct_effect = hyb_r2 - med_r2  # 控制中介变量后的直接效应
-mediation_effect = total_effect - direct_effect  # 中介效应 = 总效应 - 直接效应
-mediation_ratio = mediation_effect / total_effect if total_effect != 0 else 0
-
-print(f"总效应 (直接模型R²): {total_effect:.4f}")
-print(f"直接效应 (控制宽高后): {direct_effect:.4f}")
-print(f"中介效应 (通过宽高): {mediation_effect:.4f}")
-print(f"中介比例 (中介效应/总效应): {mediation_ratio:.2%}")
-
-# 特征重要性分析
+# 绘制特征重要性分析
 plt.figure(figsize=(18, 10))
 
 # 1. 宽度预测模型特征重要性
 plt.subplot(2, 3, 1)
-feature_importance_width = model_width.feature_importances_
-feature_names = predictors
+feature_importance_width = final_models['width'].feature_importances_
+feature_names = final_models['features']['predictors']
 plt.bar(feature_names, feature_importance_width)
 plt.xlabel('Printing Parameters')
 plt.ylabel('Importance')
@@ -477,7 +532,7 @@ plt.xticks(rotation=45)
 
 # 2. 高度预测模型特征重要性
 plt.subplot(2, 3, 2)
-feature_importance_height = model_height.feature_importances_
+feature_importance_height = final_models['height'].feature_importances_
 plt.bar(feature_names, feature_importance_height)
 plt.xlabel('Printing Parameters')
 plt.ylabel('Importance')
@@ -486,7 +541,7 @@ plt.xticks(rotation=45)
 
 # 3. 中介模型特征重要性
 plt.subplot(2, 3, 3)
-feature_importance_mediation = model_mediation.feature_importances_
+feature_importance_mediation = final_models['mediation'].feature_importances_
 mediation_feature_names = ['predicted_width', 'predicted_height']
 plt.bar(mediation_feature_names, feature_importance_mediation)
 plt.xlabel('Mediated Features')
@@ -496,7 +551,7 @@ plt.xticks(rotation=45)
 
 # 4. 直接模型特征重要性
 plt.subplot(2, 3, 4)
-feature_importance_direct = model_direct.feature_importances_
+feature_importance_direct = final_models['direct'].feature_importances_
 plt.bar(feature_names, feature_importance_direct)
 plt.xlabel('Printing Parameters')
 plt.ylabel('Importance')
@@ -505,15 +560,15 @@ plt.xticks(rotation=45)
 
 # 5. 混合模型特征重要性
 plt.subplot(2, 3, 5)
-feature_importance_hybrid = model_hybrid.feature_importances_
-plt.bar(hybrid_features, feature_importance_hybrid)
+feature_importance_hybrid = final_models['hybrid'].feature_importances_
+plt.bar(final_models['features']['hybrid'], feature_importance_hybrid)
 plt.xlabel('Features')
 plt.ylabel('Importance')
 plt.title('Hybrid Model - Feature Importance')
 plt.xticks(rotation=45)
 
 plt.tight_layout()
-importance_img_path = os.path.join("outputs", "GA_RF_Intermediary_feature_importance.png")
+importance_img_path = os.path.join("outputs", "GA_RF_Intermediary(multi seeds)_feature_importance.png")
 plt.savefig(importance_img_path, dpi=300)
 plt.show()
 print(f"特征重要性图已保存至: {importance_img_path}")
@@ -521,145 +576,83 @@ print(f"特征重要性图已保存至: {importance_img_path}")
 # 绘制预测值与真实值的散点图
 plt.figure(figsize=(18, 5))
 
-# 中介模型
-plt.subplot(1, 3, 1)
-plt.scatter(y_true, y_pred_mediation, alpha=0.7)
-plt.xlabel('True Values (MPa)')
-plt.ylabel('Predicted values (MPa)')
-plt.title(f'Mediation Model - R²={results_mediation["R2"]:.4f}')
-plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'r--')
-plt.grid(True, linestyle='--', alpha=0.7)
+model_types = ['mediation', 'direct', 'hybrid']
+model_names = ['Mediated Model', 'Direct Model', 'Hybrid Model']
 
-# 直接模型
-plt.subplot(1, 3, 2)
-plt.scatter(y_true, y_pred_direct, alpha=0.7)
-plt.xlabel('True Values (MPa)')
-plt.ylabel('Predicted values (MPa)')
-plt.title(f'Direct Model - R²={results_direct["R2"]:.4f}')
-plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'r--')
-plt.grid(True, linestyle='--', alpha=0.7)
-
-# 混合模型
-plt.subplot(1, 3, 3)
-plt.scatter(y_true, y_pred_hybrid, alpha=0.7)
-plt.xlabel('True Values (MPa)')
-plt.ylabel('Predicted values (MPa)')
-plt.title(f'Hybrid Model - R²={results_hybrid["R2"]:.4f}')
-plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'r--')
-plt.grid(True, linestyle='--', alpha=0.7)
+for i, (model_type, name) in enumerate(zip(model_types, model_names), 1):
+    plt.subplot(1, 3, i)
+    y_true = all_predictions[-1][model_type]['test']['y_true']
+    y_pred = all_predictions[-1][model_type]['test']['y_pred']
+    plt.scatter(y_true, y_pred, alpha=0.7)
+    plt.xlabel('True Values (MPa)')
+    plt.ylabel('Predicted values (MPa)')
+    r2 = all_results[-1][model_type]['test']['R2']
+    plt.title(f'{name} - R²={r2:.4f}')
+    plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'r--')
+    plt.grid(True, linestyle='--', alpha=0.7)
 
 plt.tight_layout()
-prediction_img_path = os.path.join("outputs", "GA_RF_Intermediary_prediction_scatter.png")
-plt.savefig(prediction_img_path, dpi=300)
+scatter_img_path = os.path.join("outputs", "GA_RF_Intermediary(multi seeds)_predictions_scatter.png")
+plt.savefig(scatter_img_path, dpi=300)
 plt.show()
-print(f"预测散点图已保存至: {prediction_img_path}")
+print(f"预测散点图已保存至: {scatter_img_path}")
 
-# 绘制评估指标对比图
-metrics = ['MSE', 'R2', 'MAE', 'MedAE']
-models = ['Mediation Model', 'Direct Model', 'Hybrid Model']
-results = [results_mediation, results_direct, results_hybrid]
-
-plt.figure(figsize=(16, 10))
-colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
-
-for i, metric in enumerate(metrics, 1):
-    plt.subplot(2, 2, i)
-
-    values = [result[metric] for result in results]
-    x_pos = np.arange(len(models))
-
-    plt.bar(x_pos, values, color=colors, alpha=0.7)
-    plt.title(f'Model {metric} Comparison')
-    plt.ylabel(metric)
-    plt.xticks(x_pos, models, rotation=15)
-
-    # 添加数值标签
-    for j, v in enumerate(values):
-        plt.text(j, v + 0.01, f'{v:.4f}', ha='center', rotation=45, fontsize=8)
-
-    # 设置R2的y轴范围
-    if metric == 'R2':
-        plt.ylim(0, 1)
-
-    plt.grid(axis='y', linestyle='--', alpha=0.7)
-
-plt.tight_layout()
-metrics_img_path = os.path.join("outputs", "GA_RF_Intermediary_metrics_comparison.png")
-plt.savefig(metrics_img_path, dpi=300)
-plt.show()
-print(f"评估指标对比图已保存至: {metrics_img_path}")
-
-# 导出预测结果到Excel
-output_file = get_unique_filename(os.path.join("prediction_results", "GA_RF_Intermediary_predictions.xlsx"))
+# 导出所有预测结果和平均值到Excel
+output_file = get_unique_filename(os.path.join("prediction_results", "GA_RF_Intermediary(multi seeds)_analysis_predictions.xlsx"))
 with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-    # 测试集预测结果
-    df_test_results = pd.DataFrame({
-        'True Values': y_true,
-        'Mediation Model Predictions': y_pred_mediation.round(4),
-        'Direct Model Predictions': y_pred_direct.round(4),
-        'Hybrid Model Predictions': y_pred_hybrid.round(4)
-    })
-    df_test_results.to_excel(writer, sheet_name='test_predictions', index=False)
+    # 导出每次实验的预测结果
+    for exp_idx, predictions in enumerate(all_predictions):
+        for model_type, model_name in zip(model_types, model_names):
+            # 验证集结果
+            df_val = pd.DataFrame({
+                'True Values': predictions[model_type]['val']['y_true'],
+                'Predicted Values': predictions[model_type]['val']['y_pred'].round(4),
+                'Error': (predictions[model_type]['val']['y_true'] - predictions[model_type]['val']['y_pred']).round(4)
+            })
+            df_val.to_excel(writer, sheet_name=f'exp_{exp_idx + 1}_{model_type}_val', index=False)
 
-    # 模型参数对比
-    params_data = {
-        '参数': ['n_estimators', 'max_depth', 'min_samples_split', 'min_samples_leaf', 'max_features'],
-        '宽度预测模型': params_width,
-        '高度预测模型': params_height,
-        '中介模型': params_mediation,
-        '直接模型': params_direct,
-        '混合模型': params_hybrid
-    }
-    df_params = pd.DataFrame(params_data)
-    df_params.to_excel(writer, sheet_name='model_parameters', index=False)
+            # 测试集结果
+            df_test = pd.DataFrame({
+                'True Values': predictions[model_type]['test']['y_true'],
+                'Predicted Values': predictions[model_type]['test']['y_pred'].round(4),
+                'Error': (predictions[model_type]['test']['y_true'] - predictions[model_type]['test']['y_pred']).round(
+                    4)
+            })
+            df_test.to_excel(writer, sheet_name=f'exp_{exp_idx + 1}_{model_type}_test', index=False)
 
-    # 模型评估指标汇总
-    metrics_data = {
-        'Metric': ['MSE', 'R2', 'MAE', 'MedAE'],
-        '中介模型': [
-            round(results_mediation['MSE'], 4),
-            round(results_mediation['R2'], 4),
-            round(results_mediation['MAE'], 4),
-            round(results_mediation['MedAE'], 4)
-        ],
-        '直接模型': [
-            round(results_direct['MSE'], 4),
-            round(results_direct['R2'], 4),
-            round(results_direct['MAE'], 4),
-            round(results_direct['MedAE'], 4)
-        ],
-        '混合模型': [
-            round(results_hybrid['MSE'], 4),
-            round(results_hybrid['R2'], 4),
-            round(results_hybrid['MAE'], 4),
-            round(results_hybrid['MedAE'], 4)
-        ]
-    }
-    df_metrics = pd.DataFrame(metrics_data)
-    df_metrics.to_excel(writer, sheet_name='metrics_summary', index=False)
+    # 导出平均结果
+    avg_df = pd.DataFrame()
+    for model_type in ['mediation', 'direct', 'hybrid']:
+        for dataset in ['val', 'test']:
+            for metric, value in average_results[model_type][dataset].items():
+                avg_df.loc[f'{model_type}_{dataset}', metric] = round(value, 4)
+    avg_df.to_excel(writer, sheet_name='average_results')
 
-    # 中介效应分析结果
-    mediation_analysis = {
-        '指标': ['总效应 (直接模型R²)', '直接效应 (控制宽高后)', '中介效应 (通过宽高)', '中介比例'],
-        '值': [
-            f"{total_effect:.4f}",
-            f"{direct_effect:.4f}",
-            f"{mediation_effect:.4f}",
-            f"{mediation_ratio:.2%}"
-        ]
-    }
-    df_mediation = pd.DataFrame(mediation_analysis)
-    df_mediation.to_excel(writer, sheet_name='mediation_analysis', index=False)
+print(f"预测结果已导出至: {output_file}")
 
-print(f"\n所有预测结果已导出至: {output_file}")
+# 保存最后一次实验的模型
+if final_models:
+    model_width_path = os.path.join("models", "ga_rf(multi seeds)_width_predictor_final.joblib")
+    model_height_path = os.path.join("models", "ga_rf(multi seeds)_height_predictor_final.joblib")
+    model_mediation_path = os.path.join("models", "ga_rf(multi seeds)_mediation_model_final.joblib")
+    model_direct_path = os.path.join("models", "ga_rf(multi seeds)_direct_model_final.joblib")
+    model_hybrid_path = os.path.join("models", "ga_rf(multi seeds)_hybrid_model_final.joblib")
 
-# 计算总运行时间
+    joblib.dump(final_models['width'], model_width_path)
+    joblib.dump(final_models['height'], model_height_path)
+    joblib.dump(final_models['mediation'], model_mediation_path)
+    joblib.dump(final_models['direct'], model_direct_path)
+    joblib.dump(final_models['hybrid'], model_hybrid_path)
+
+    print(f"\n最终模型已保存至:")
+    print(f"- 宽度预测模型: {model_width_path}")
+    print(f"- 高度预测模型: {model_height_path}")
+    print(f"- 中介模型: {model_mediation_path}")
+    print(f"- 直接模型: {model_direct_path}")
+    print(f"- 混合模型: {model_hybrid_path}")
+
+# 计算并输出总运行时间
 end_time = time.time()
-total_time = end_time - start_time
-print("\n" + "=" * 50)
-print(f"模型训练完成！总运行时间: {timedelta(seconds=int(total_time))}")
+total_time = timedelta(seconds=int(end_time - start_time))
+print(f"\n实验完成，总运行时间: {total_time}")
 print(f"结束时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-print(f"详细日志已保存到: {log_file}")
-
-# 恢复标准输出
-sys.stdout = sys.__stdout__
