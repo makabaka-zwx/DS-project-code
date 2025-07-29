@@ -210,7 +210,7 @@ def run_mediation_experiment(seed, data, param_grid):
 # 创建输出目录
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("prediction_results", exist_ok=True)
-os.makedirs("Regression_Comparison", exist_ok=True)
+os.makedirs("XGB_Regression_Comparison", exist_ok=True)
 
 # 开始计时
 start_time = time.time()
@@ -421,7 +421,7 @@ plt.title('The Importance of the influence of Width and Height on Mechanical Mod
 plt.xticks(rotation=45)
 
 plt.tight_layout()
-plt.savefig(os.path.join("Regression_Comparison", "XGB_Intermediary_feature_importance.png"), dpi=300)
+plt.savefig(os.path.join("XGB_Regression_Comparison", "XGB_Intermediary_feature_importance.png"), dpi=300)
 plt.show()
 
 # 绘制三种模型的预测值与真实值对比
@@ -446,7 +446,7 @@ for i, (model_type, name) in enumerate(zip(model_types, model_names), 1):
     plt.grid(alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(os.path.join("Regression_Comparison", "XGB_Intermediary_model_comparison_scatter.png"), dpi=300)
+plt.savefig(os.path.join("XGB_Regression_Comparison", "XGB_Intermediary_model_comparison_scatter.png"), dpi=300)
 plt.show()
 
 # 绘制三种模型的评估指标对比
@@ -476,7 +476,7 @@ for i, metric in enumerate(metrics, 1):
     plt.grid(axis='y', alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(os.path.join("Regression_Comparison", "XGB_Intermediary_model_metrics_comparison.png"), dpi=300)
+plt.savefig(os.path.join("XGB_Regression_Comparison", "XGB_Intermediary_model_metrics_comparison.png"), dpi=300)
 plt.show()
 
 # 导出所有预测结果和平均值到Excel
