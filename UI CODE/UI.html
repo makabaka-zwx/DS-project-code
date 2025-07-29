@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>y值反推x值计算器</title>
+    <title>骨支架打印参数模拟器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
@@ -50,10 +50,10 @@
                 <div class="flex justify-between items-center">
                     <div class="flex items-center space-x-2">
                         <i class="fa fa-calculator text-2xl"></i>
-                        <h1 class="text-2xl md:text-3xl font-bold">y值反推x值计算器</h1>
+                        <h1 class="text-2xl md:text-3xl font-bold">骨支架打印参数模拟器</h1>
                     </div>
                     <div class="hidden md:block">
-                        <p class="opacity-90">基于本地模型的自变量反推工具</p>
+                        <p class="opacity-90">基于本地模型的打印参数反推工具</p>
                     </div>
                 </div>
             </div>
@@ -81,20 +81,20 @@
                                 <label for="targetY" class="block text-sm font-medium text-gray-700 mb-1">目标y值</label>
                                 <input type="number" id="targetY" name="targetY" step="0.01"
                                     class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
-                                    placeholder="输入想要得到的y值" required>
+                                    placeholder="输入想要得到的机械模量(y值)" required>
                             </div>
 
                             <div>
                                 <label for="tolerance" class="block text-sm font-medium text-gray-700 mb-1">误差容忍度</label>
                                 <div class="flex items-center">
-                                    <input type="number" id="tolerance" name="tolerance" step="0.01" min="0.01" max="10" value="0.5"
+                                    <input type="number" id="tolerance" name="tolerance" step="0.01" min="0.01" max="100" value="10"
                                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all">
                                     <span class="ml-2 text-gray-500">允许的误差范围</span>
                                 </div>
                             </div>
 
                             <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white font-medium py-3 px-4 rounded-lg transition-all duration-300 flex items-center justify-center">
-                                <i class="fa fa-search mr-2"></i>查找可能的x值
+                                <i class="fa fa-search mr-2"></i>查找可能的打印参数
                             </button>
                         </form>
 
@@ -103,7 +103,7 @@
                             <ul class="text-sm text-gray-600 space-y-2">
                                 <li class="flex items-start">
                                     <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
-                                    <span>选择一个模型，输入您想要的y值</span>
+                                    <span>选择一个模型，输入您想要的机械模量（y值）</span>
                                 </li>
                                 <li class="flex items-start">
                                     <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
@@ -111,7 +111,12 @@
                                 </li>
                                 <li class="flex items-start">
                                     <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
-                                    <span>系统会返回可能的x1, x2, x3取值范围和示例组合</span>
+                                    <span>系统会返回可能的参数范围：<br>
+                                        - x1: 打印温度（180–250°C）<br>
+                                        - x2: 打印速度（100–5100 mm/min）<br>
+                                        - x3: 进给率（15–42%）<br>
+                                        示例组合会显示具体数值及计算得到的 y 值
+                                    </span>
                                 </li>
                             </ul>
                         </div>
@@ -248,10 +253,10 @@
                                     <table class="min-w-full divide-y divide-gray-200">
                                         <thead>
                                             <tr>
-                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">x1</th>
-                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">x2</th>
-                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">x3</th>
-                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">计算得到的y</th>
+                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">x1: printing_temperature</th>
+                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">x2: printing_speed</th>
+                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">x3: feed_rate</th>
+                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">预计机械模量</th>
                                             </tr>
                                         </thead>
                                         <tbody id="examplesTable" class="bg-white divide-y divide-gray-200">

@@ -1,53 +1,44 @@
 from flask import Flask, render_template_string, request, jsonify
 import numpy as np
 import os
+import joblib  # 用于加载 joblib 模型
 
 app = Flask(__name__)
 
+# 加载 joblib 模型
+model_ratio_path = os.path.join("../models", "ga_rf_ratio_model3.0.joblib")
+model_dim_path = os.path.join("../models", "ga_rf_dim_model3.0.joblib")
 
-# 示例模型 - 用户可以替换为自己的实际模型
-# 模型1: y = x1 + 2*x2 + 3*x3
-def model1(x1, x2, x3):
-    return x1 + 2 * x2 + 3 * x3
+# 加载模型
+try:
+    model_ratio = joblib.load(model_ratio_path)
+    model_dim = joblib.load(model_dim_path)
+except FileNotFoundError:
+    print("错误: 模型文件未找到，请确保模型文件所在文件夹models，与app.py所在文件夹，在同一目录下。")
+    model_ratio = None
+    model_dim = None
 
-
-# 模型2: y = x1*x2 + x3
-def model2(x1, x2, x3):
-    return x1 * x2 + x3
-
-
-# 模型3: y = sin(x1) + cos(x2) + x3
-def model3(x1, x2, x3):
-    return np.sin(x1) + np.cos(x2) + x3
-
-
-# 所有模型的元数据
+# 所有模型的元数据（替换为 joblib 模型）
 models = {
-    "model1": {
-        "name": "线性模型 (y = x1 + 2*x2 + 3*x3)",
-        "function": model1,
+    "model_ratio": {
+        "name": "GA-RF 模型 (aspect_ratio 特征)",
+        "function": model_ratio,
         "x_ranges": {
-            "x1": (-10, 10),
-            "x2": (-5, 5),
-            "x3": (-2, 8)
+            "x1": (180, 250),  # 打印温度（°C）
+            "x2": (100, 5100), # 打印速度（mm/min）
+            "x3": (15, 42),    # 进给率（%）
+            "x4": (0, 2)       # aspect_ratio（保持原逻辑）
         }
     },
-    "model2": {
-        "name": "非线性模型 (y = x1*x2 + x3)",
-        "function": model2,
+    "model_dim": {
+        "name": "GA-RF 模型 (Height+Width 特征)",
+        "function": model_dim,
         "x_ranges": {
-            "x1": (-5, 5),
-            "x2": (-5, 5),
-            "x3": (-10, 10)
-        }
-    },
-    "model3": {
-        "name": "三角函数模型 (y = sin(x1) + cos(x2) + x3)",
-        "function": model3,
-        "x_ranges": {
-            "x1": (-np.pi, np.pi),
-            "x2": (-np.pi, np.pi),
-            "x3": (-2, 2)
+            "x1": (180, 250),  # 打印温度（°C）
+            "x2": (100, 5100), # 打印速度（mm/min）
+            "x3": (15, 42),    # 进给率（%）
+            "x4": (0, 100),    # Height（保持原逻辑）
+            "x5": (0, 100)     # Width（保持原逻辑）
         }
     }
 }
@@ -55,7 +46,7 @@ models = {
 
 def find_possible_x_values(target_y, model_key, tolerance=0.5, num_samples=1000):
     """
-    根据目标y值和模型，寻找可能的x1, x2, x3取值范围
+    根据目标y值和模型，寻找可能的x取值范围（适配 joblib 模型）
 
     参数:
         target_y: 目标y值
@@ -68,30 +59,39 @@ def find_possible_x_values(target_y, model_key, tolerance=0.5, num_samples=1000)
     """
     model = models[model_key]
     x_ranges = model["x_ranges"]
+    model_func = model["function"]
 
-    # 生成随机采样点
-    x1_samples = np.random.uniform(
-        low=x_ranges["x1"][0],
-        high=x_ranges["x1"][1],
-        size=num_samples
-    )
-    x2_samples = np.random.uniform(
-        low=x_ranges["x2"][0],
-        high=x_ranges["x2"][1],
-        size=num_samples
-    )
-    x3_samples = np.random.uniform(
-        low=x_ranges["x3"][0],
-        high=x_ranges["x3"][1],
-        size=num_samples
-    )
+    if model_func is None:
+        return {
+            "found": False,
+            "message": "模型未正确加载，请检查模型文件。"
+        }
+
+    # 生成随机采样点（根据模型的输入特征数量调整）
+    num_features = len(x_ranges)
+    samples = []
+    for feature in x_ranges.values():
+        samples.append(np.random.uniform(low=feature[0], high=feature[1], size=num_samples))
+
+    # 转换为 numpy 数组并转置，以便按样本访问
+    samples = np.array(samples).T
 
     # 计算每个采样点的y值，并筛选出符合条件的点
     valid_points = []
-    for x1, x2, x3 in zip(x1_samples, x2_samples, x3_samples):
-        y = model["function"](x1, x2, x3)
+    for sample in samples:
+        # 模型预测（根据特征数量调整）
+        if num_features == 4:
+            y = model_func.predict([[sample[0], sample[1], sample[2], sample[3]]])[0]
+        elif num_features == 5:
+            y = model_func.predict([[sample[0], sample[1], sample[2], sample[3], sample[4]]])[0]
+        else:
+            return {
+                "found": False,
+                "message": "模型特征数量不匹配，请检查配置。"
+            }
+
         if abs(y - target_y) <= tolerance:
-            valid_points.append((x1, x2, x3, y))
+            valid_points.append(sample.tolist() + [y])
 
     if not valid_points:
         return {
@@ -100,38 +100,25 @@ def find_possible_x_values(target_y, model_key, tolerance=0.5, num_samples=1000)
         }
 
     # 计算每个x的取值范围
-    x1_values = [p[0] for p in valid_points]
-    x2_values = [p[1] for p in valid_points]
-    x3_values = [p[2] for p in valid_points]
+    feature_values = {}
+    for i in range(num_features):
+        feature_values[f"x{i + 1}"] = [point[i] for point in valid_points]
 
     # 提取前5个示例组合
     examples = []
-    for p in valid_points[:5]:
-        examples.append({
-            "x1": round(p[0], 4),
-            "x2": round(p[1], 4),
-            "x3": round(p[2], 4),
-            "y": round(p[3], 4)
-        })
+    for point in valid_points[:5]:
+        example = {f"x{i + 1}": round(point[i], 2) for i in range(num_features)}  # 保留2位小数
+        example["y"] = round(point[-1], 2)
+        examples.append(example)
 
     return {
         "found": True,
         "ranges": {
-            "x1": {
-                "min": round(min(x1_values), 4),
-                "max": round(max(x1_values), 4),
-                "count": len(x1_values)
-            },
-            "x2": {
-                "min": round(min(x2_values), 4),
-                "max": round(max(x2_values), 4),
-                "count": len(x2_values)
-            },
-            "x3": {
-                "min": round(min(x3_values), 4),
-                "max": round(max(x3_values), 4),
-                "count": len(x3_values)
-            }
+            f"x{i + 1}": {
+                "min": round(min(feature_values[f"x{i + 1}"]), 2),  # 保留2位小数
+                "max": round(max(feature_values[f"x{i + 1}"]), 2),  # 保留2位小数
+                "count": len(feature_values[f"x{i + 1}"])
+            } for i in range(num_features)
         },
         "examples": examples,
         "total_points": len(valid_points),
@@ -173,7 +160,7 @@ def calculate():
 
 
 if __name__ == '__main__':
-    # 确保index.html存在
+    # 确保UI.html存在
     if not os.path.exists('UI.html'):
         print("错误: UI.html文件，请确保该文件与app.py在同一目录下。")
     else:
