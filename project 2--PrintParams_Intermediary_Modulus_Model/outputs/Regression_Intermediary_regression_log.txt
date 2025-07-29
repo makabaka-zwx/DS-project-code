@@ -1,0 +1,132 @@
+开始中介效应回归分析，日志将保存到 outputs\Regression_Intermediary_regression_log.txt
+开始时间: 2025-07-29 04:33:25
+==================================================
+数据准备完成:
+- 包含的特征: ['printing_temperature', 'feed_rate', 'printing_speed', 'Height', 'Width', 'Experiment_mean(MPa)']
+- 打印参数(自变量): ['printing_temperature', 'feed_rate', 'printing_speed']
+- 中介变量(同时作为因变量): ['Height', 'Width']
+- 目标变量: 'Experiment_mean(MPa)'
+
+数据集划分完成:
+- 训练集样本数: 33 (68.8%)
+- 验证集样本数: 7 (14.6%)
+- 测试集样本数: 8 (16.7%)
+
+Linear Regression (predict Height) 验证集R²: 0.9814
+
+Linear Regression (predict Width) 验证集R²: 0.8913
+Polynomial Regression (degree=2, predict Height) 最优alpha: 0.001, 验证集R²: 0.9975
+Polynomial Regression (degree=2, predict Width) 最优alpha: 0.1, 验证集R²: 0.9908
+Polynomial Regression (degree=3, predict Height) 最优alpha: 0.1, 验证集R²: 0.9990
+Polynomial Regression (degree=3, predict Width) 最优alpha: 100, 验证集R²: 0.9593
+线性中介模型 验证集R²: 0.6630
+多项式中介模型(degree=2) 最优alpha: 0.1, 验证集R²: 0.5788
+多项式中介模型(degree=3) 最优alpha: 0.01, 验证集R²: 0.5272
+
+Direct Linear Model 验证集R²: 0.7096
+Direct Polynomial Model (degree=2) 最优alpha: 0.001, 验证集R²: 0.7535
+Direct Polynomial Model (degree=3) 最优alpha: 0.001, 验证集R²: 0.8799
+
+Hybrid Linear Model 验证集R²: 0.6857
+Hybrid Polynomial Model (degree=2) 最优alpha: 0.001, 验证集R²: 0.8983
+Hybrid Polynomial Model (degree=3) 最优alpha: 10, 验证集R²: 0.8942
+
+==================================================
+所有模型测试集评估结果（保留4位小数）:
+==================================================
+
+Mediation Model (degree=1)评估：
+均方误差 (MSE): 655.8854
+决定系数 (R2): 0.8645
+平均绝对误差 (MAE): 19.7035
+中位数绝对误差 (MedAE): 16.0331
+
+Mediation Model (degree=2)评估：
+均方误差 (MSE): 1118.0710
+决定系数 (R2): 0.7690
+平均绝对误差 (MAE): 28.6870
+中位数绝对误差 (MedAE): 23.4597
+
+Mediation Model (degree=3)评估：
+均方误差 (MSE): 2011.0788
+决定系数 (R2): 0.5844
+平均绝对误差 (MAE): 32.6742
+中位数绝对误差 (MedAE): 23.5104
+
+Direct Linear Model评估：
+均方误差 (MSE): 476.6324
+决定系数 (R2): 0.9015
+平均绝对误差 (MAE): 18.9610
+中位数绝对误差 (MedAE): 18.4626
+
+Direct Polynomial Model (degree=2)评估：
+均方误差 (MSE): 1120.1613
+决定系数 (R2): 0.7685
+平均绝对误差 (MAE): 26.2401
+中位数绝对误差 (MedAE): 26.0434
+
+Direct Polynomial Model (degree=3)评估：
+均方误差 (MSE): 5290.9199
+决定系数 (R2): -0.0933
+平均绝对误差 (MAE): 48.4517
+中位数绝对误差 (MedAE): 30.6431
+
+Hybrid Linear Model评估：
+均方误差 (MSE): 390.1320
+决定系数 (R2): 0.9194
+平均绝对误差 (MAE): 16.8325
+中位数绝对误差 (MedAE): 14.4992
+
+Hybrid Polynomial Model (degree=2)评估：
+均方误差 (MSE): 11567.0382
+决定系数 (R2): -1.3902
+平均绝对误差 (MAE): 82.0451
+中位数绝对误差 (MedAE): 73.0476
+
+Hybrid Polynomial Model (degree=3)评估：
+均方误差 (MSE): 84055.2722
+决定系数 (R2): -16.3692
+平均绝对误差 (MAE): 177.0988
+中位数绝对误差 (MedAE): 78.5022
+
+线性模型系数分析:
+------------------------------
+
+Linear Regression (predict Width) 系数:
+printing_temperature: 0.0000
+feed_rate: 0.0127
+printing_speed: 0.0000
+截距: 0.0947
+
+Linear Regression (predict Height) 系数:
+printing_temperature: 0.0009
+feed_rate: 0.0089
+printing_speed: -0.0000
+截距: -0.0057
+
+Mediation Model (degree=1) 系数 (宽高对机械模量的影响):
+predicted_width: 1312.7920
+predicted_height: -716.4337
+截距: 16.4761
+
+Direct Linear Model 系数 (打印参数对机械模量的直接影响):
+printing_temperature: -1.1019
+feed_rate: 10.7331
+printing_speed: 0.0151
+截距: 248.9676
+
+==================================================
+中介效应分析结果:
+------------------------------
+总效应 (直接模型R²): 0.9015
+直接效应 (控制宽高后): 0.0549
+中介效应 (通过宽高): 0.8466
+中介比例 (中介效应/总效应): 93.91%
+
+R²最高的模型: Hybrid Linear Model (R²=0.9194)
+
+==================================================
+模型训练与评估完成！总运行时间: 0:00:09
+结束时间: 2025-07-29 04:33:35
+详细日志已保存到: outputs\Regression_Intermediary_regression_log.txt
+可视化结果已保存到: outputs/
