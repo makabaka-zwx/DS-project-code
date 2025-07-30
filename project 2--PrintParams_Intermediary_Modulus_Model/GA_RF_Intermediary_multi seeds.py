@@ -53,7 +53,7 @@ def get_unique_filename(base_name):
 
 
 def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name, seed):
-    """使用遗传算法优化并训练随机森林模型（新增seed参数）"""
+    """使用遗传算法优化并训练随机森林模型"""
     # 遗传算法参数设置
     POPULATION_SIZE = 50  # 种群大小
     NGEN = 15  # 迭代代数
@@ -80,11 +80,16 @@ def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name, seed):
     toolbox = base.Toolbox()
     # 使用当前种子初始化随机数生成器
     toolbox.register("random", random.Random, seed)
-    toolbox.register("n_estimators", toolbox.random.randint, 50, 200)  # 决策树数量
-    toolbox.register("max_depth", lambda: toolbox.random.choice([None, 5, 10, 15, 20]))  # max_depth的可能取值
-    toolbox.register("min_samples_split", toolbox.random.randint, 2, 10)  # 最小分割样本数
-    toolbox.register("min_samples_leaf", toolbox.random.randint, 1, 4)  # 最小叶子节点样本数
-    toolbox.register("max_features", lambda: toolbox.random.choice(['sqrt', 'log2', None]))  # 最大特征数
+
+    # 修复：获取随机数生成器实例
+    rng = toolbox.random()
+
+    # 使用随机数生成器实例注册工具函数
+    toolbox.register("n_estimators", rng.randint, 50, 200)  # 决策树数量
+    toolbox.register("max_depth", lambda: rng.choice([None, 5, 10, 15, 20]))  # max_depth的可能取值
+    toolbox.register("min_samples_split", rng.randint, 2, 10)  # 最小分割样本数
+    toolbox.register("min_samples_leaf", rng.randint, 1, 4)  # 最小叶子节点样本数
+    toolbox.register("max_features", lambda: rng.choice(['sqrt', 'log2', None]))  # 最大特征数
 
     # 创建个体和种群
     toolbox.register("individual", tools.initCycle, creator.Individual,
@@ -125,17 +130,17 @@ def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name, seed):
     # 注册遗传操作，自定义变异操作处理max_depth
     def custom_mutate(individual):
         for i in range(len(individual)):
-            if toolbox.random.random() < MUTPB_INIT:  # 使用工具类的随机数生成器
+            if rng.random() < MUTPB_INIT:  # 使用随机数生成器实例
                 if i == 1:  # 针对max_depth的处理
-                    individual[i] = toolbox.random.choice([None, 5, 10, 15, 20])
+                    individual[i] = rng.choice([None, 5, 10, 15, 20])
                 elif i == 0:  # n_estimators
-                    individual[i] = toolbox.random.randint(50, 300)
+                    individual[i] = rng.randint(50, 300)
                 elif i == 2:  # min_samples_split
-                    individual[i] = toolbox.random.randint(2, 10)
+                    individual[i] = rng.randint(2, 10)
                 elif i == 3:  # min_samples_leaf
-                    individual[i] = toolbox.random.randint(1, 4)
+                    individual[i] = rng.randint(1, 4)
                 elif i == 4:  # max_features
-                    individual[i] = toolbox.random.choice(['sqrt', 'log2', None])
+                    individual[i] = rng.choice(['sqrt', 'log2', None])
         return individual,
 
     toolbox.register("evaluate", evalRF)
@@ -180,13 +185,13 @@ def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name, seed):
 
         # 应用交叉和变异
         for child1, child2 in zip(offspring[::2], offspring[1::2]):
-            if toolbox.random.random() < cxpb:  # 使用工具类的随机数生成器
+            if rng.random() < cxpb:  # 使用随机数生成器实例
                 toolbox.mate(child1, child2)
                 del child1.fitness.values
                 del child2.fitness.values
 
         for mutant in offspring:
-            if toolbox.random.random() < mutpb:  # 使用工具类的随机数生成器
+            if rng.random() < mutpb:  # 使用随机数生成器实例
                 toolbox.mutate(mutant)
                 del mutant.fitness.values
 
@@ -598,7 +603,8 @@ plt.show()
 print(f"预测散点图已保存至: {scatter_img_path}")
 
 # 导出所有预测结果和平均值到Excel
-output_file = get_unique_filename(os.path.join("prediction_results", "GA_RF_Intermediary(multi seeds)_analysis_predictions.xlsx"))
+output_file = get_unique_filename(
+    os.path.join("prediction_results", "GA_RF_Intermediary(multi seeds)_analysis_predictions.xlsx"))
 with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
     # 导出每次实验的预测结果
     for exp_idx, predictions in enumerate(all_predictions):
