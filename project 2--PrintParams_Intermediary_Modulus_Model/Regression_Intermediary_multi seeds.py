@@ -49,10 +49,10 @@ def get_unique_filename(base_name):
 
 
 def run_regression_experiment(seed):
-    """运行单次回归实验并返回结果"""
+    """运行单次回归实验并返回结果（包含验证集和测试集）"""
     np.random.seed(seed)
 
-    # 加载数据 - 不考虑aspect_ratio，只保留宽高作为可能的中介变量
+    # 加载数据
     data = pd.read_csv('./data_FEA_ANN_FEA-ANN.csv')
     selected_columns = ['printing_temperature', 'feed_rate', 'printing_speed', 'Height', 'Width',
                         'Experiment_mean(MPa)']
@@ -73,7 +73,7 @@ def run_regression_experiment(seed):
     # 准备模型字典
     models = {}  # 存储所有模型
     predictions = {}  # 存储所有预测结果
-    results = {}  # 存储所有评估结果
+    results = {}  # 存储所有评估结果（包含val和test）
     model_names = {}  # 存储模型名称
 
     # --------------------------
@@ -159,7 +159,7 @@ def run_regression_experiment(seed):
         if degree == 1:
             final_model = LinearRegression()
             final_model.fit(train_mediation_features, train_data[target])
-            return final_model, None
+            return final_model, None, val_mediation_features
         else:
             poly_final = PolynomialFeatures(degree=1)
             X_train_final = poly_final.fit_transform(train_mediation_features)
@@ -181,18 +181,22 @@ def run_regression_experiment(seed):
                     best_alpha = alpha
                     best_model = model
 
-            return best_model, poly_final
+            return best_model, poly_final, val_mediation_features
 
     # 创建不同阶数的中介模型
     for degree in [1] + poly_degrees:
-        model, poly = create_mediation_model(degree)
+        model, poly, val_mediation_features = create_mediation_model(degree)
         key = f'mediation_model_degree{degree}'
         models[key] = {
             'model': model,
             'poly': poly,
-            'degree': degree
+            'degree': degree,
+            'val_features': val_mediation_features  # 保存验证集特征用于评估
         }
-        model_names[key] = f'Mediation Model (degree={degree})'
+        if degree == 1:
+            model_names[key] = 'Mediation Model (Linear)'
+        else:
+            model_names[key] = f'Mediation Model (Polynomial degree={degree})'
 
     # --------------------------
     # 2. 直接模型：打印参数直接预测机械模量
@@ -209,6 +213,7 @@ def run_regression_experiment(seed):
     for degree in poly_degrees:
         poly = PolynomialFeatures(degree=degree)
         X_train_poly = poly.fit_transform(train_data[predictors])
+        X_val_poly = poly.transform(val_data[predictors])  # 保存验证集特征
 
         best_alpha = None
         best_r2 = -np.inf
@@ -218,7 +223,7 @@ def run_regression_experiment(seed):
         for alpha in alpha_values:
             model = Ridge(alpha=alpha, random_state=seed)
             model.fit(X_train_poly, train_data[target])
-            val_pred = model.predict(poly.transform(val_data[predictors]))
+            val_pred = model.predict(X_val_poly)
             val_r2 = r2_score(val_data[target], val_pred)
 
             if val_r2 > best_r2:
@@ -229,7 +234,8 @@ def run_regression_experiment(seed):
         key = f'direct_poly{degree}'
         models[key] = {
             'model': best_model,
-            'poly': poly
+            'poly': poly,
+            'val_features': X_val_poly  # 保存验证集特征
         }
         model_names[key] = f'Direct Polynomial Model (degree={degree})'
 
@@ -250,6 +256,7 @@ def run_regression_experiment(seed):
     for degree in poly_degrees:
         poly = PolynomialFeatures(degree=degree)
         X_train_poly = poly.fit_transform(train_data[hybrid_features])
+        X_val_poly = poly.transform(val_data[hybrid_features])  # 保存验证集特征
 
         best_alpha = None
         best_r2 = -np.inf
@@ -259,7 +266,7 @@ def run_regression_experiment(seed):
         for alpha in alpha_values:
             model = Ridge(alpha=alpha, random_state=seed)
             model.fit(X_train_poly, train_data[target])
-            val_pred = model.predict(poly.transform(val_data[hybrid_features]))
+            val_pred = model.predict(X_val_poly)
             val_r2 = r2_score(val_data[target], val_pred)
 
             if val_r2 > best_r2:
@@ -270,12 +277,13 @@ def run_regression_experiment(seed):
         key = f'hybrid_poly{degree}'
         models[key] = {
             'model': best_model,
-            'poly': poly
+            'poly': poly,
+            'val_features': X_val_poly  # 保存验证集特征
         }
         model_names[key] = f'Hybrid Polynomial Model (degree={degree})'
 
     # --------------------------
-    # 在测试集上评估所有模型
+    # 评估所有模型（同时计算验证集和测试集）
     # --------------------------
 
     # 评估中介模型
@@ -284,6 +292,16 @@ def run_regression_experiment(seed):
         model_info = models[key]
         degree_mediator = model_info['degree']
 
+        # 验证集评估
+        val_mediation_features = model_info['val_features']
+        if model_info['poly'] is None:
+            y_pred_val = model_info['model'].predict(val_mediation_features)
+        else:
+            X_val_final = model_info['poly'].transform(val_mediation_features)
+            y_pred_val = model_info['model'].predict(X_val_final)
+        y_true_val = val_data[target]
+
+        # 测试集评估
         width_model_key = f'mediator_linear_width' if degree_mediator == 1 else f'mediator_poly{degree_mediator}_width'
         height_model_key = f'mediator_linear_height' if degree_mediator == 1 else f'mediator_poly{degree_mediator}_height'
 
@@ -304,77 +322,131 @@ def run_regression_experiment(seed):
         })
 
         if model_info['poly'] is None:
-            y_pred = model_info['model'].predict(test_mediation_features)
+            y_pred_test = model_info['model'].predict(test_mediation_features)
         else:
             X_test_final = model_info['poly'].transform(test_mediation_features)
-            y_pred = model_info['model'].predict(X_test_final)
+            y_pred_test = model_info['model'].predict(X_test_final)
+        y_true_test = test_data[target]
 
-        y_true = test_data[target]
-        mse = mean_squared_error(y_true, y_pred)
-        r2 = r2_score(y_true, y_pred)
-        mae = mean_absolute_error(y_true, y_pred)
-        medae = median_absolute_error(y_true, y_pred)
-
-        predictions[key] = y_pred
+        # 存储验证集和测试集结果
         results[key] = {
-            'MSE': mse, 'R2': r2, 'MAE': mae, 'MedAE': medae
+            'val': {
+                'MSE': mean_squared_error(y_true_val, y_pred_val),
+                'R2': r2_score(y_true_val, y_pred_val),
+                'MAE': mean_absolute_error(y_true_val, y_pred_val),
+                'MedAE': median_absolute_error(y_true_val, y_pred_val)
+            },
+            'test': {
+                'MSE': mean_squared_error(y_true_test, y_pred_test),
+                'R2': r2_score(y_true_test, y_pred_test),
+                'MAE': mean_absolute_error(y_true_test, y_pred_test),
+                'MedAE': median_absolute_error(y_true_test, y_pred_test)
+            }
         }
 
     # 评估直接模型
     key = 'direct_linear'
     model = models[key]
-    y_pred = model.predict(test_data[predictors])
-    y_true = test_data[target]
+    # 验证集
+    y_pred_val = model.predict(val_data[predictors])
+    y_true_val = val_data[target]
+    # 测试集
+    y_pred_test = model.predict(test_data[predictors])
+    y_true_test = test_data[target]
     results[key] = {
-        'MSE': mean_squared_error(y_true, y_pred),
-        'R2': r2_score(y_true, y_pred),
-        'MAE': mean_absolute_error(y_true, y_pred),
-        'MedAE': median_absolute_error(y_true, y_pred)
+        'val': {
+            'MSE': mean_squared_error(y_true_val, y_pred_val),
+            'R2': r2_score(y_true_val, y_pred_val),
+            'MAE': mean_absolute_error(y_true_val, y_pred_val),
+            'MedAE': median_absolute_error(y_true_val, y_pred_val)
+        },
+        'test': {
+            'MSE': mean_squared_error(y_true_test, y_pred_test),
+            'R2': r2_score(y_true_test, y_pred_test),
+            'MAE': mean_absolute_error(y_true_test, y_pred_test),
+            'MedAE': median_absolute_error(y_true_test, y_pred_test)
+        }
     }
 
     for degree in poly_degrees:
         key = f'direct_poly{degree}'
         model_info = models[key]
+        # 验证集
+        y_pred_val = model_info['model'].predict(model_info['val_features'])
+        y_true_val = val_data[target]
+        # 测试集
         X_test_poly = model_info['poly'].transform(test_data[predictors])
-        y_pred = model_info['model'].predict(X_test_poly)
-        y_true = test_data[target]
+        y_pred_test = model_info['model'].predict(X_test_poly)
+        y_true_test = test_data[target]
         results[key] = {
-            'MSE': mean_squared_error(y_true, y_pred),
-            'R2': r2_score(y_true, y_pred),
-            'MAE': mean_absolute_error(y_true, y_pred),
-            'MedAE': median_absolute_error(y_true, y_pred)
+            'val': {
+                'MSE': mean_squared_error(y_true_val, y_pred_val),
+                'R2': r2_score(y_true_val, y_pred_val),
+                'MAE': mean_absolute_error(y_true_val, y_pred_val),
+                'MedAE': median_absolute_error(y_true_val, y_pred_val)
+            },
+            'test': {
+                'MSE': mean_squared_error(y_true_test, y_pred_test),
+                'R2': r2_score(y_true_test, y_pred_test),
+                'MAE': mean_absolute_error(y_true_test, y_pred_test),
+                'MedAE': median_absolute_error(y_true_test, y_pred_test)
+            }
         }
 
     # 评估混合模型
     key = 'hybrid_linear'
     model = models[key]
-    y_pred = model.predict(test_data[hybrid_features])
-    y_true = test_data[target]
+    # 验证集
+    y_pred_val = model.predict(val_data[hybrid_features])
+    y_true_val = val_data[target]
+    # 测试集
+    y_pred_test = model.predict(test_data[hybrid_features])
+    y_true_test = test_data[target]
     results[key] = {
-        'MSE': mean_squared_error(y_true, y_pred),
-        'R2': r2_score(y_true, y_pred),
-        'MAE': mean_absolute_error(y_true, y_pred),
-        'MedAE': median_absolute_error(y_true, y_pred)
+        'val': {
+            'MSE': mean_squared_error(y_true_val, y_pred_val),
+            'R2': r2_score(y_true_val, y_pred_val),
+            'MAE': mean_absolute_error(y_true_val, y_pred_val),
+            'MedAE': median_absolute_error(y_true_val, y_pred_val)
+        },
+        'test': {
+            'MSE': mean_squared_error(y_true_test, y_pred_test),
+            'R2': r2_score(y_true_test, y_pred_test),
+            'MAE': mean_absolute_error(y_true_test, y_pred_test),
+            'MedAE': median_absolute_error(y_true_test, y_pred_test)
+        }
     }
 
     for degree in poly_degrees:
         key = f'hybrid_poly{degree}'
         model_info = models[key]
+        # 验证集
+        y_pred_val = model_info['model'].predict(model_info['val_features'])
+        y_true_val = val_data[target]
+        # 测试集
         X_test_poly = model_info['poly'].transform(test_data[hybrid_features])
-        y_pred = model_info['model'].predict(X_test_poly)
-        y_true = test_data[target]
+        y_pred_test = model_info['model'].predict(X_test_poly)
+        y_true_test = test_data[target]
         results[key] = {
-            'MSE': mean_squared_error(y_true, y_pred),
-            'R2': r2_score(y_true, y_pred),
-            'MAE': mean_absolute_error(y_true, y_pred),
-            'MedAE': median_absolute_error(y_true, y_pred)
+            'val': {
+                'MSE': mean_squared_error(y_true_val, y_pred_val),
+                'R2': r2_score(y_true_val, y_pred_val),
+                'MAE': mean_absolute_error(y_true_val, y_pred_val),
+                'MedAE': median_absolute_error(y_true_val, y_pred_val)
+            },
+            'test': {
+                'MSE': mean_squared_error(y_true_test, y_pred_test),
+                'R2': r2_score(y_true_test, y_pred_test),
+                'MAE': mean_absolute_error(y_true_test, y_pred_test),
+                'MedAE': median_absolute_error(y_true_test, y_pred_test)
+            }
         }
 
-    return results, model_names, test_data[target]
+    return results, model_names, val_data[target], test_data[target]
 
 
 def calculate_averages(results_list):
-    """计算多次实验结果的平均值"""
+    """计算多次实验结果的平均值（包含验证集和测试集）"""
     if not results_list:
         return {}
 
@@ -382,25 +454,33 @@ def calculate_averages(results_list):
     avg_results = {}
     model_keys = results_list[0].keys()
 
-    # 为每个模型初始化指标列表
+    # 为每个模型初始化指标列表（包含val和test）
     for model_key in model_keys:
         avg_results[model_key] = {
-            'MSE': [],
-            'R2': [],
-            'MAE': [],
-            'MedAE': []
+            'val': {
+                'MSE': [], 'R2': [], 'MAE': [], 'MedAE': []
+            },
+            'test': {
+                'MSE': [], 'R2': [], 'MAE': [], 'MedAE': []
+            }
         }
 
     # 收集所有实验结果
     for result in results_list:
         for model_key in model_keys:
-            for metric in avg_results[model_key]:
-                avg_results[model_key][metric].append(result[model_key][metric])
+            for dataset_type in ['val', 'test']:
+                for metric in avg_results[model_key][dataset_type]:
+                    avg_results[model_key][dataset_type][metric].append(
+                        result[model_key][dataset_type][metric]
+                    )
 
     # 计算平均值
     for model_key in model_keys:
-        for metric in avg_results[model_key]:
-            avg_results[model_key][metric] = np.mean(avg_results[model_key][metric])
+        for dataset_type in ['val', 'test']:
+            for metric in avg_results[model_key][dataset_type]:
+                avg_results[model_key][dataset_type][metric] = np.mean(
+                    avg_results[model_key][dataset_type][metric]
+                )
 
     return avg_results
 
@@ -408,10 +488,10 @@ def calculate_averages(results_list):
 def calculate_mediation_effect(average_results):
     """计算中介效应比例"""
     # 总效应 (直接模型的效应)
-    total_effect = average_results['direct_linear']['R2']
+    total_effect = average_results['direct_linear']['test']['R2']
 
     # 直接效应 (控制中介变量后的直接效应)
-    direct_effect = average_results['hybrid_linear']['R2'] - average_results['mediation_model_degree1']['R2']
+    direct_effect = average_results['hybrid_linear']['test']['R2'] - average_results['mediation_model_degree1']['test']['R2']
 
     # 中介效应 = 总效应 - 直接效应
     mediation_effect = total_effect - direct_effect
@@ -451,46 +531,65 @@ if __name__ == "__main__":
     results_list = []
     all_predictions = {}
     model_names = None
-    y_true = None
+    y_true_val = None
+    y_true_test = None
 
     for i, seed in enumerate(seeds):
         print(f"\n{'=' * 30}")
         print(f"运行实验 {i + 1}/{len(seeds)}，种子: {seed}")
         print(f"{'=' * 30}")
 
-        results, exp_model_names, exp_y_true = run_regression_experiment(seed)
+        results, exp_model_names, exp_y_val, exp_y_test = run_regression_experiment(seed)
         results_list.append(results)
 
         # 保存模型名称（所有实验相同）
         if model_names is None:
             model_names = exp_model_names
-            y_true = exp_y_true
+            y_true_val = exp_y_val
+            y_true_test = exp_y_test
 
-        # 保存预测结果
+        # 输出当前种子的评估结果（包含验证集和测试集）
+        print(f"\n实验 {i + 1} 各模型评估结果:")
+        print('-' * 60)
         for model_key in results:
-            if model_key not in all_predictions:
-                all_predictions[model_key] = []
-            # 这里简化处理，实际应用可能需要更复杂的存储方式
+            print(f'{model_names[model_key]}:')
+            print(f'  验证集:')
+            print(f'    MSE: {results[model_key]["val"]["MSE"]:.4f}')
+            print(f'    R2: {results[model_key]["val"]["R2"]:.4f}')
+            print(f'    MAE: {results[model_key]["val"]["MAE"]:.4f}')
+            print(f'    MedAE: {results[model_key]["val"]["MedAE"]:.4f}')
+            print(f'  测试集:')
+            print(f'    MSE: {results[model_key]["test"]["MSE"]:.4f}')
+            print(f'    R2: {results[model_key]["test"]["R2"]:.4f}')
+            print(f'    MAE: {results[model_key]["test"]["MAE"]:.4f}')
+            print(f'    MedAE: {results[model_key]["test"]["MedAE"]:.4f}')
+            print('-' * 60)
 
     # 计算平均结果
     print("\n" + "=" * 50)
     print("计算多次实验的平均结果...")
     avg_results = calculate_averages(results_list)
 
-    # 输出平均评估结果
+    # 输出平均评估结果（包含验证集和测试集）
     print("\n" + "=" * 50)
-    print("所有模型平均测试集评估结果（保留4位小数）:")
+    print("所有模型平均评估结果（保留4位小数）:")
     print('=' * 50)
     for model_key in avg_results:
         print(f'\n{model_names[model_key]} 平均评估：')
-        print(f'均方误差 (MSE): {avg_results[model_key]["MSE"]:.4f}')
-        print(f'决定系数 (R2): {avg_results[model_key]["R2"]:.4f}')
-        print(f'平均绝对误差 (MAE): {avg_results[model_key]["MAE"]:.4f}')
-        print(f'中位数绝对误差 (MedAE): {avg_results[model_key]["MedAE"]:.4f}')
+        print(f'  验证集:')
+        print(f'    均方误差 (MSE): {avg_results[model_key]["val"]["MSE"]:.4f}')
+        print(f'    决定系数 (R2): {avg_results[model_key]["val"]["R2"]:.4f}')
+        print(f'    平均绝对误差 (MAE): {avg_results[model_key]["val"]["MAE"]:.4f}')
+        print(f'    中位数绝对误差 (MedAE): {avg_results[model_key]["val"]["MedAE"]:.4f}')
+        print(f'  测试集:')
+        print(f'    均方误差 (MSE): {avg_results[model_key]["test"]["MSE"]:.4f}')
+        print(f'    决定系数 (R2): {avg_results[model_key]["test"]["R2"]:.4f}')
+        print(f'    平均绝对误差 (MAE): {avg_results[model_key]["test"]["MAE"]:.4f}')
+        print(f'    中位数绝对误差 (MedAE): {avg_results[model_key]["test"]["MedAE"]:.4f}')
 
     # 中介效应分析（基于线性模型的平均结果）
     print("\n" + "=" * 50)
-    print("中介效应分析结果 (基于平均结果):")
+    print("中介效应分析结果 (基于测试集平均结果):")
     print("-" * 30)
     mediation_stats = calculate_mediation_effect(avg_results)
 
@@ -499,15 +598,12 @@ if __name__ == "__main__":
     print(f"中介效应 (通过宽高平均): {mediation_stats['mediation_effect']:.4f}")
     print(f"中介比例 (中介效应/总效应): {mediation_stats['mediation_ratio']:.2%}")
 
-    # 找出平均R²最高的模型
-    best_model_key = max(avg_results, key=lambda k: avg_results[k]['R2'])
+    # 找出测试集平均R²最高的模型
+    best_model_key = max(avg_results, key=lambda k: avg_results[k]['test']['R2'])
     best_model_name = model_names[best_model_key]
-    best_r2 = avg_results[best_model_key]['R2']
+    best_r2 = avg_results[best_model_key]['test']['R2']
 
-    print(f"\n平均R²最高的模型: {best_model_name} (平均R²={best_r2:.4f})")
-
-
-
+    print(f"\n测试集平均R²最高的模型: {best_model_name} (平均R²={best_r2:.4f})")
 
     # 计算总运行时间
     end_time = time.time()
