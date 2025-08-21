@@ -62,13 +62,90 @@ def run_regression_experiment(seed):
     poly_degrees = [2, 3]
 
     # 定义变量
-    predictors = ['printing_temperature', 'feed_rate', 'printing_speed']  # 打印参数
+    predictors = ['printing_temperature', 'feed_rate', 'printing_speed']  # 打印参数（3个输入变量）
     mediators = ['Height', 'Width']  # 中介变量
     target = 'Experiment_mean(MPa)'  # 最终目标变量
 
-    # 数据集划分：训练集(70%)、验证集(15%)、测试集(15%)
-    train_data, temp_data = train_test_split(data, test_size=0.3, random_state=seed)
-    val_data, test_data = train_test_split(temp_data, test_size=0.5, random_state=seed)
+    # 数据集划分：基于机械模量的分层抽样
+    # 训练集(70%)、验证集(15%)、测试集(15%)
+    # 首先创建分层所需的 bins
+
+    # 动态调整分箱数量，确保每个箱至少有4个样本（满足两次分层抽样要求：train_test_split两次）
+    min_samples_per_bin = 4  # 增加到4，因为我们要做两次分层抽样
+    max_bins = 10
+
+    # 计算最大可能的分箱数量
+    max_possible_bins = len(data) // min_samples_per_bin
+    num_bins = min(max_bins, max_possible_bins)
+
+    # 确保至少有2个分箱
+    num_bins = max(2, num_bins)
+
+    # 创建分箱
+    data['target_bin'] = pd.cut(data[target], bins=num_bins, labels=False)
+
+    # 检查每个分箱的样本数量，如果有分箱样本数不足，合并相邻分箱
+    bin_counts = data['target_bin'].value_counts().sort_index()
+    while (bin_counts < min_samples_per_bin).any():
+        # 找到样本最少的分箱
+        min_bin = bin_counts.idxmin()
+        # 合并到相邻的分箱
+        if min_bin == 0:
+            data['target_bin'] = data['target_bin'].replace(1, 0)
+        elif min_bin == len(bin_counts) - 1:
+            data['target_bin'] = data['target_bin'].replace(min_bin, min_bin - 1)
+        else:
+            # 合并到样本较多的相邻分箱
+            left_count = bin_counts[min_bin - 1]
+            right_count = bin_counts[min_bin + 1]
+            if left_count >= right_count:
+                data['target_bin'] = data['target_bin'].replace(min_bin, min_bin - 1)
+            else:
+                data['target_bin'] = data['target_bin'].replace(min_bin, min_bin + 1)
+        # 重新计算分箱数量
+        bin_counts = data['target_bin'].value_counts().sort_index()
+        # 重命名分箱标签，确保连续
+        data['target_bin'] = pd.Categorical(data['target_bin']).codes
+        bin_counts = data['target_bin'].value_counts().sort_index()
+
+        # 如果只剩下一个分箱，无法再合并，只能打破循环
+        if len(bin_counts) == 1:
+            break
+
+    # 如果所有数据都在一个分箱中，使用随机抽样而非分层抽样
+    stratify_param = data['target_bin'] if len(bin_counts) > 1 else None
+
+    # 第一次分层抽样：划分训练集和临时集
+    train_data, temp_data = train_test_split(
+        data,
+        test_size=0.3,
+        random_state=seed,
+        stratify=stratify_param  # 基于目标变量分层
+    )
+
+    # 为第二次抽样准备分层参数
+    if stratify_param is not None:
+        stratify_param_temp = temp_data['target_bin']
+        # 检查临时集中每个分箱的样本数
+        temp_bin_counts = stratify_param_temp.value_counts()
+        # 如果有分箱样本数不足2，改用随机抽样
+        if (temp_bin_counts < 2).any():
+            stratify_param_temp = None
+    else:
+        stratify_param_temp = None
+
+    # 第二次分层抽样：从临时集中划分验证集和测试集
+    val_data, test_data = train_test_split(
+        temp_data,
+        test_size=0.5,
+        random_state=seed,
+        stratify=stratify_param_temp  # 基于目标变量分层
+    )
+
+    # 删除辅助列
+    train_data = train_data.drop('target_bin', axis=1)
+    val_data = val_data.drop('target_bin', axis=1)
+    test_data = test_data.drop('target_bin', axis=1)
 
     # 准备模型字典
     models = {}  # 存储所有模型
@@ -78,12 +155,15 @@ def run_regression_experiment(seed):
 
     # --------------------------
     # 1. 中介模型：打印参数 → 宽高 → 机械模量
+    #    第一层：3个输入变量（打印参数）
+    #    第二层：5个输入变量（3个打印参数 + 2个预测的宽高）
     # --------------------------
 
-    # 1.1 第一步：用打印参数预测宽和高
+    # 1.1 第一步：用打印参数预测宽和高（第一层：3个输入变量）
     # 线性回归预测宽高
     for mediator in mediators:
         model = LinearRegression()
+        # 明确使用3个打印参数作为输入
         model.fit(train_data[predictors], train_data[mediator])
         key = f'mediator_linear_{mediator.lower()}'
         models[key] = model
@@ -93,6 +173,7 @@ def run_regression_experiment(seed):
     for degree in poly_degrees:
         for mediator in mediators:
             poly = PolynomialFeatures(degree=degree)
+            # 明确使用3个打印参数作为输入
             X_train_poly = poly.fit_transform(train_data[predictors])
             X_val_poly = poly.transform(val_data[predictors])
 
@@ -119,11 +200,12 @@ def run_regression_experiment(seed):
             }
             model_names[key] = f'Polynomial Regression (degree={degree}, predict {mediator})'
 
-    # 1.2 第二步：用预测的宽高预测机械模量（中介模型）
+    # 1.2 第二步：用【打印参数 + 预测的宽高】预测机械模量（第二层：5个输入变量）
     def create_mediation_model(degree=1):
         width_model_key = f'mediator_linear_width' if degree == 1 else f'mediator_poly{degree}_width'
         height_model_key = f'mediator_linear_height' if degree == 1 else f'mediator_poly{degree}_height'
 
+        # 预测宽高
         if degree == 1:
             train_pred_width = models[width_model_key].predict(train_data[predictors])
             train_pred_height = models[height_model_key].predict(train_data[predictors])
@@ -135,11 +217,16 @@ def run_regression_experiment(seed):
                 models[height_model_key]['poly'].transform(train_data[predictors])
             )
 
-        train_mediation_features = pd.DataFrame({
-            'predicted_width': train_pred_width,
-            'predicted_height': train_pred_height
-        })
+        # 创建第二层特征：3个打印参数 + 2个预测的宽高（共5个特征）
+        train_mediation_features = train_data[predictors].copy()
+        train_mediation_features['predicted_width'] = train_pred_width
+        train_mediation_features['predicted_height'] = train_pred_height
 
+        # 验证特征数量是否为5
+        assert train_mediation_features.shape[
+                   1] == 5, f"中介模型第二层特征数量错误: 应为5，实际为{train_mediation_features.shape[1]}"
+
+        # 为验证集创建相同的特征
         if degree == 1:
             val_pred_width = models[width_model_key].predict(val_data[predictors])
             val_pred_height = models[height_model_key].predict(val_data[predictors])
@@ -151,16 +238,21 @@ def run_regression_experiment(seed):
                 models[height_model_key]['poly'].transform(val_data[predictors])
             )
 
-        val_mediation_features = pd.DataFrame({
-            'predicted_width': val_pred_width,
-            'predicted_height': val_pred_height
-        })
+        val_mediation_features = val_data[predictors].copy()
+        val_mediation_features['predicted_width'] = val_pred_width
+        val_mediation_features['predicted_height'] = val_pred_height
 
+        # 验证特征数量是否为5
+        assert val_mediation_features.shape[
+                   1] == 5, f"中介模型第二层验证特征数量错误: 应为5，实际为{val_mediation_features.shape[1]}"
+
+        # 训练最终模型（使用5个特征）
         if degree == 1:
             final_model = LinearRegression()
             final_model.fit(train_mediation_features, train_data[target])
             return final_model, None, val_mediation_features
         else:
+            # 这里使用degree=1确保不会增加新的交互特征，保持5个输入特征
             poly_final = PolynomialFeatures(degree=1)
             X_train_final = poly_final.fit_transform(train_mediation_features)
             X_val_final = poly_final.transform(val_mediation_features)
@@ -305,6 +397,7 @@ def run_regression_experiment(seed):
         width_model_key = f'mediator_linear_width' if degree_mediator == 1 else f'mediator_poly{degree_mediator}_width'
         height_model_key = f'mediator_linear_height' if degree_mediator == 1 else f'mediator_poly{degree_mediator}_height'
 
+        # 生成测试集的预测宽高
         if degree_mediator == 1:
             test_pred_width = models[width_model_key].predict(test_data[predictors])
             test_pred_height = models[height_model_key].predict(test_data[predictors])
@@ -316,11 +409,16 @@ def run_regression_experiment(seed):
                 models[height_model_key]['poly'].transform(test_data[predictors])
             )
 
-        test_mediation_features = pd.DataFrame({
-            'predicted_width': test_pred_width,
-            'predicted_height': test_pred_height
-        })
+        # 创建测试集的5个特征：3个打印参数 + 2个预测宽高
+        test_mediation_features = test_data[predictors].copy()
+        test_mediation_features['predicted_width'] = test_pred_width
+        test_mediation_features['predicted_height'] = test_pred_height
 
+        # 验证特征数量是否为5
+        assert test_mediation_features.shape[
+                   1] == 5, f"中介模型第二层测试特征数量错误: 应为5，实际为{test_mediation_features.shape[1]}"
+
+        # 预测并评估
         if model_info['poly'] is None:
             y_pred_test = model_info['model'].predict(test_mediation_features)
         else:
@@ -491,7 +589,8 @@ def calculate_mediation_effect(average_results):
     total_effect = average_results['direct_linear']['test']['R2']
 
     # 直接效应 (控制中介变量后的直接效应)
-    direct_effect = average_results['hybrid_linear']['test']['R2'] - average_results['mediation_model_degree1']['test']['R2']
+    direct_effect = average_results['hybrid_linear']['test']['R2'] - average_results['mediation_model_degree1']['test'][
+        'R2']
 
     # 中介效应 = 总效应 - 直接效应
     mediation_effect = total_effect - direct_effect
@@ -525,6 +624,8 @@ if __name__ == "__main__":
     print(f"开始中介效应回归分析，日志将保存到 {log_file}")
     print(f"开始时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"使用种子列表: {seeds}")
+    print("使用基于机械模量的分层抽样进行数据集划分")
+    print("中介模型结构: 第一层3个输入变量，第二层5个输入变量")
     print("=" * 50)
 
     # 运行多次实验
