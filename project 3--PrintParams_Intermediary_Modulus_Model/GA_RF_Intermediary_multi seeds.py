@@ -93,9 +93,9 @@ def train_ga_rf(X_train, y_train, X_val, y_val, feature_set_name, seed):
 
     # 创建个体和种群
     toolbox.register("individual", tools.initCycle, creator.Individual,
-                     (toolbox.n_estimators, toolbox.max_depth,
-                      toolbox.min_samples_split, toolbox.min_samples_leaf,
-                      toolbox.max_features), n=1)
+    (toolbox.n_estimators, toolbox.max_depth,
+     toolbox.min_samples_split, toolbox.min_samples_leaf,
+     toolbox.max_features), n = 1)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     # 定义适应度函数
@@ -240,72 +240,159 @@ def run_ga_mediation_experiment(seed, data):
     random.seed(seed)
 
     # 定义变量
-    predictors = ['printing_temperature', 'feed_rate', 'printing_speed']  # 打印参数
+    predictors = ['printing_temperature', 'feed_rate', 'printing_speed']  # 打印参数（3个输入变量）
     mediators = ['Height', 'Width']  # 中介变量
     target = 'Experiment_mean(MPa)'  # 最终目标变量
 
-    # 数据集划分：训练集(70%)、验证集(15%)、测试集(15%)
-    train_val, test = train_test_split(data, test_size=0.3, random_state=seed)
-    train, val = train_test_split(train_val, test_size=0.5, random_state=seed)
+    # 数据集划分：基于机械模量的分层抽样
+    # 训练集(70%)、验证集(15%)、测试集(15%)
+    # 动态调整分箱数量，确保每个箱至少有4个样本（满足两次分层抽样要求）
+    min_samples_per_bin = 4
+    max_bins = 10
 
-    # 1.1 训练宽高预测模型
+    # 计算最大可能的分箱数量
+    max_possible_bins = len(data) // min_samples_per_bin
+    num_bins = min(max_bins, max_possible_bins)
+
+    # 确保至少有2个分箱
+    num_bins = max(2, num_bins)
+
+    # 创建分箱
+    data['target_bin'] = pd.cut(data[target], bins=num_bins, labels=False)
+
+    # 检查每个分箱的样本数量，如果有分箱样本数不足，合并相邻分箱
+    bin_counts = data['target_bin'].value_counts().sort_index()
+    while (bin_counts < min_samples_per_bin).any():
+        # 找到样本最少的分箱
+        min_bin = bin_counts.idxmin()
+        # 合并到相邻的分箱
+        if min_bin == 0:
+            data['target_bin'] = data['target_bin'].replace(1, 0)
+        elif min_bin == len(bin_counts) - 1:
+            data['target_bin'] = data['target_bin'].replace(min_bin, min_bin - 1)
+        else:
+            # 合并到样本较多的相邻分箱
+            left_count = bin_counts[min_bin - 1]
+            right_count = bin_counts[min_bin + 1]
+            if left_count >= right_count:
+                data['target_bin'] = data['target_bin'].replace(min_bin, min_bin - 1)
+            else:
+                data['target_bin'] = data['target_bin'].replace(min_bin, min_bin + 1)
+        # 重新计算分箱数量
+        bin_counts = data['target_bin'].value_counts().sort_index()
+        # 重命名分箱标签，确保连续
+        data['target_bin'] = pd.Categorical(data['target_bin']).codes
+        bin_counts = data['target_bin'].value_counts().sort_index()
+
+        # 如果只剩下一个分箱，无法再合并，只能打破循环
+        if len(bin_counts) == 1:
+            break
+
+    # 如果所有数据都在一个分箱中，使用随机抽样而非分层抽样
+    stratify_param = data['target_bin'] if len(bin_counts) > 1 else None
+
+    # 第一次分层抽样：划分训练集和临时集
+    train_data, temp_data = train_test_split(
+        data,
+        test_size=0.3,
+        random_state=seed,
+        stratify=stratify_param  # 基于目标变量分层
+    )
+
+    # 为第二次抽样准备分层参数
+    if stratify_param is not None:
+        stratify_param_temp = temp_data['target_bin']
+        # 检查临时集中每个分箱的样本数
+        temp_bin_counts = stratify_param_temp.value_counts()
+        # 如果有分箱样本数不足2，改用随机抽样
+        if (temp_bin_counts < 2).any():
+            stratify_param_temp = None
+    else:
+        stratify_param_temp = None
+
+    # 第二次分层抽样：从临时集中划分验证集和测试集
+    val_data, test_data = train_test_split(
+        temp_data,
+        test_size=0.5,
+        random_state=seed,
+        stratify=stratify_param_temp  # 基于目标变量分层
+    )
+
+    # 删除辅助列
+    train_data = train_data.drop('target_bin', axis=1)
+    val_data = val_data.drop('target_bin', axis=1)
+    test_data = test_data.drop('target_bin', axis=1)
+
+    # 1.1 训练宽高预测模型（第一层：3个输入变量）
     model_width, params_width = train_ga_rf(
-        train[predictors], train['Width'],
-        val[predictors], val['Width'],
+        train_data[predictors], train_data['Width'],
+        val_data[predictors], val_data['Width'],
         "Width_Predictor",
         seed  # 传入当前种子
     )
 
     model_height, params_height = train_ga_rf(
-        train[predictors], train['Height'],
-        val[predictors], val['Height'],
+        train_data[predictors], train_data['Height'],
+        val_data[predictors], val_data['Height'],
         "Height_Predictor",
         seed  # 传入当前种子
     )
 
-    # 生成预测的宽高特征
-    train_pred_width = model_width.predict(train[predictors])
-    train_pred_height = model_height.predict(train[predictors])
-    train_mediation_features = pd.DataFrame({
-        'predicted_width': train_pred_width,
-        'predicted_height': train_pred_height
-    })
+    # 生成预测的宽高特征，并与原始3个打印参数合并（第二层：5个输入变量）
+    # 训练集特征
+    train_pred_width = model_width.predict(train_data[predictors])
+    train_pred_height = model_height.predict(train_data[predictors])
+    train_mediation_features = train_data[predictors].copy()
+    train_mediation_features['predicted_width'] = train_pred_width
+    train_mediation_features['predicted_height'] = train_pred_height
 
-    val_pred_width = model_width.predict(val[predictors])
-    val_pred_height = model_height.predict(val[predictors])
-    val_mediation_features = pd.DataFrame({
-        'predicted_width': val_pred_width,
-        'predicted_height': val_pred_height
-    })
+    # 验证特征数量是否为5
+    assert train_mediation_features.shape[1] == 5, \
+        f"中介模型第二层训练特征数量错误: 应为5，实际为{train_mediation_features.shape[1]}"
 
-    test_pred_width = model_width.predict(test[predictors])
-    test_pred_height = model_height.predict(test[predictors])
-    test_mediation_features = pd.DataFrame({
-        'predicted_width': test_pred_width,
-        'predicted_height': test_pred_height
-    })
+    # 验证集特征
+    val_pred_width = model_width.predict(val_data[predictors])
+    val_pred_height = model_height.predict(val_data[predictors])
+    val_mediation_features = val_data[predictors].copy()
+    val_mediation_features['predicted_width'] = val_pred_width
+    val_mediation_features['predicted_height'] = val_pred_height
 
-    # 1.2 训练中介模型
+    # 验证特征数量是否为5
+    assert val_mediation_features.shape[1] == 5, \
+        f"中介模型第二层验证特征数量错误: 应为5，实际为{val_mediation_features.shape[1]}"
+
+    # 测试集特征
+    test_pred_width = model_width.predict(test_data[predictors])
+    test_pred_height = model_height.predict(test_data[predictors])
+    test_mediation_features = test_data[predictors].copy()
+    test_mediation_features['predicted_width'] = test_pred_width
+    test_mediation_features['predicted_height'] = test_pred_height
+
+    # 验证特征数量是否为5
+    assert test_mediation_features.shape[1] == 5, \
+        f"中介模型第二层测试特征数量错误: 应为5，实际为{test_mediation_features.shape[1]}"
+
+    # 1.2 训练中介模型（使用5个特征：3个打印参数 + 2个预测的宽高）
     model_mediation, params_mediation = train_ga_rf(
-        train_mediation_features, train[target],
-        val_mediation_features, val[target],
+        train_mediation_features, train_data[target],
+        val_mediation_features, val_data[target],
         "Mediation_Model",
         seed  # 传入当前种子
     )
 
-    # 2. 训练直接模型
+    # 2. 训练直接模型（3个打印参数直接预测目标）
     model_direct, params_direct = train_ga_rf(
-        train[predictors], train[target],
-        val[predictors], val[target],
+        train_data[predictors], train_data[target],
+        val_data[predictors], val_data[target],
         "Direct_Model",
         seed  # 传入当前种子
     )
 
-    # 3. 训练混合模型
+    # 3. 训练混合模型（5个特征：3个打印参数 + 2个实际宽高）
     hybrid_features = predictors + mediators
     model_hybrid, params_hybrid = train_ga_rf(
-        train[hybrid_features], train[target],
-        val[hybrid_features], val[target],
+        train_data[hybrid_features], train_data[target],
+        val_data[hybrid_features], val_data[target],
         "Hybrid_Model",
         seed  # 传入当前种子
     )
@@ -314,60 +401,60 @@ def run_ga_mediation_experiment(seed, data):
     y_pred_val_mediation = model_mediation.predict(val_mediation_features)
     y_pred_test_mediation = model_mediation.predict(test_mediation_features)
 
-    y_pred_val_direct = model_direct.predict(val[predictors])
-    y_pred_test_direct = model_direct.predict(test[predictors])
+    y_pred_val_direct = model_direct.predict(val_data[predictors])
+    y_pred_test_direct = model_direct.predict(test_data[predictors])
 
-    y_pred_val_hybrid = model_hybrid.predict(val[hybrid_features])
-    y_pred_test_hybrid = model_hybrid.predict(test[hybrid_features])
+    y_pred_val_hybrid = model_hybrid.predict(val_data[hybrid_features])
+    y_pred_test_hybrid = model_hybrid.predict(test_data[hybrid_features])
 
     # 计算评估指标
     results = {
         'mediation': {
             'val': {
-                'MSE': mean_squared_error(val[target], y_pred_val_mediation),
-                'R2': r2_score(val[target], y_pred_val_mediation)
+                'MSE': mean_squared_error(val_data[target], y_pred_val_mediation),
+                'R2': r2_score(val_data[target], y_pred_val_mediation)
             },
             'test': {
-                'MSE': mean_squared_error(test[target], y_pred_test_mediation),
-                'R2': r2_score(test[target], y_pred_test_mediation),
-                'MAE': mean_absolute_error(test[target], y_pred_test_mediation),
-                'MedAE': median_absolute_error(test[target], y_pred_test_mediation)
+                'MSE': mean_squared_error(test_data[target], y_pred_test_mediation),
+                'R2': r2_score(test_data[target], y_pred_test_mediation),
+                'MAE': mean_absolute_error(test_data[target], y_pred_test_mediation),
+                'MedAE': median_absolute_error(test_data[target], y_pred_test_mediation)
             }
         },
         'direct': {
             'val': {
-                'MSE': mean_squared_error(val[target], y_pred_val_direct),
-                'R2': r2_score(val[target], y_pred_val_direct)
+                'MSE': mean_squared_error(val_data[target], y_pred_val_direct),
+                'R2': r2_score(val_data[target], y_pred_val_direct)
             },
             'test': {
-                'MSE': mean_squared_error(test[target], y_pred_test_direct),
-                'R2': r2_score(test[target], y_pred_test_direct),
-                'MAE': mean_absolute_error(test[target], y_pred_test_direct),
-                'MedAE': median_absolute_error(test[target], y_pred_test_direct)
+                'MSE': mean_squared_error(test_data[target], y_pred_test_direct),
+                'R2': r2_score(test_data[target], y_pred_test_direct),
+                'MAE': mean_absolute_error(test_data[target], y_pred_test_direct),
+                'MedAE': median_absolute_error(test_data[target], y_pred_test_direct)
             }
         },
         'hybrid': {
             'val': {
-                'MSE': mean_squared_error(val[target], y_pred_val_hybrid),
-                'R2': r2_score(val[target], y_pred_val_hybrid)
+                'MSE': mean_squared_error(val_data[target], y_pred_val_hybrid),
+                'R2': r2_score(val_data[target], y_pred_val_hybrid)
             },
             'test': {
-                'MSE': mean_squared_error(test[target], y_pred_test_hybrid),
-                'R2': r2_score(test[target], y_pred_test_hybrid),
-                'MAE': mean_absolute_error(test[target], y_pred_test_hybrid),
-                'MedAE': median_absolute_error(test[target], y_pred_test_hybrid)
+                'MSE': mean_squared_error(test_data[target], y_pred_test_hybrid),
+                'R2': r2_score(test_data[target], y_pred_test_hybrid),
+                'MAE': mean_absolute_error(test_data[target], y_pred_test_hybrid),
+                'MedAE': median_absolute_error(test_data[target], y_pred_test_hybrid)
             }
         }
     }
 
     # 保存预测结果和模型
     predictions = {
-        'mediation': {'val': {'y_true': val[target], 'y_pred': y_pred_val_mediation},
-                      'test': {'y_true': test[target], 'y_pred': y_pred_test_mediation}},
-        'direct': {'val': {'y_true': val[target], 'y_pred': y_pred_val_direct},
-                   'test': {'y_true': test[target], 'y_pred': y_pred_test_direct}},
-        'hybrid': {'val': {'y_true': val[target], 'y_pred': y_pred_val_hybrid},
-                   'test': {'y_true': test[target], 'y_pred': y_pred_test_hybrid}}
+        'mediation': {'val': {'y_true': val_data[target], 'y_pred': y_pred_val_mediation},
+                      'test': {'y_true': test_data[target], 'y_pred': y_pred_test_mediation}},
+        'direct': {'val': {'y_true': val_data[target], 'y_pred': y_pred_val_direct},
+                   'test': {'y_true': test_data[target], 'y_pred': y_pred_test_direct}},
+        'hybrid': {'val': {'y_true': val_data[target], 'y_pred': y_pred_val_hybrid},
+                   'test': {'y_true': test_data[target], 'y_pred': y_pred_test_hybrid}}
     }
 
     models = {
@@ -379,7 +466,7 @@ def run_ga_mediation_experiment(seed, data):
         'features': {'predictors': predictors, 'mediators': mediators, 'hybrid': hybrid_features}
     }
 
-    return results, predictions, models, test
+    return results, predictions, models, test_data
 
 
 # 创建输出目录
@@ -411,6 +498,7 @@ print(f"- 包含的特征: {list(data.columns)}")
 print(f"- 打印参数(自变量): ['printing_temperature', 'feed_rate', 'printing_speed']")
 print(f"- 中介变量: ['Height', 'Width']")
 print(f"- 目标变量: 'Experiment_mean(MPa)'")
+print(f"- 中介模型结构: 第一层3个输入变量，第二层5个输入变量")
 
 # 存储所有实验结果
 all_results = []
@@ -440,7 +528,7 @@ for i, seed in enumerate(seeds):
     print(f"混合模型 - 测试集R²: {results['hybrid']['test']['R2']:.4f}")
 
 
-# 计算所有实验的平均值（复用RF版本的计算逻辑）
+# 计算所有实验的平均值
 def calculate_averages(results_list):
     avg_results = {
         'mediation': {
@@ -497,7 +585,7 @@ for model_type, model_name in [
     print(f"  中位数绝对误差 (MedAE): {average_results[model_type]['test']['MedAE']:.4f}")
 
 
-# 中介效应分析（复用RF版本的计算逻辑）
+# 中介效应分析
 def calculate_mediation_effect(average_results):
     total_effect = average_results['direct']['test']['R2']
     direct_effect = average_results['hybrid']['test']['R2'] - average_results['mediation']['test']['R2']
@@ -547,7 +635,7 @@ plt.xticks(rotation=45)
 # 3. 中介模型特征重要性
 plt.subplot(2, 3, 3)
 feature_importance_mediation = final_models['mediation'].feature_importances_
-mediation_feature_names = ['predicted_width', 'predicted_height']
+mediation_feature_names = final_models['features']['predictors'] + ['predicted_width', 'predicted_height']
 plt.bar(mediation_feature_names, feature_importance_mediation)
 plt.xlabel('Mediated Features')
 plt.ylabel('Importance')
