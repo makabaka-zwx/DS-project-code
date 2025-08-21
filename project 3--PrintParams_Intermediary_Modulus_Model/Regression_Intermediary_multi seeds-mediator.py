@@ -762,3 +762,219 @@ def calculate_average_classical_mediation(classical_mediation_list):
             'a_coefs': {m: [] for m in classical_mediation_list[0][pred]['a_coefs'].keys()},
             'b_coefs': {m: [] for m in classical_mediation_list[0][pred]['b_coefs'].keys()}
         }
+
+
+if __name__ == "__main__":
+
+    # 创建结果目录
+    if not os.path.exists('results'):
+        os.makedirs('results')
+
+    # 创建日志文件
+    log_filename = get_unique_filename('results/regression_experiment.log')
+    sys.stdout = Logger(log_filename)
+
+    print("=== 开始回归实验 ===")
+    print(f"实验时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"种子列表: {seeds}")
+    print(f"总实验次数: {len(seeds)}")
+
+    start_time = time.time()
+
+    # 存储所有实验结果
+    all_results = []
+    all_classical_mediation = []
+
+    # 执行多次实验
+    for i, seed in enumerate(seeds):
+        print(f"\n=== 实验 {i + 1}/{len(seeds)} (种子: {seed}) ===")
+        exp_start_time = time.time()
+
+        # 捕获单次实验中可能出现的错误
+        try:
+            results, model_names, _, _, classical_mediation = run_regression_experiment(seed)
+
+            # 验证中介效应结果是否有效
+            if classical_mediation is None:
+                print(f"警告: 实验 {i + 1} 中介效应计算返回None，将跳过该次结果")
+            else:
+                all_results.append(results)
+                all_classical_mediation.append(classical_mediation)
+        except Exception as e:
+            print(f"实验 {i + 1} 出错: {str(e)}，将跳过该次结果")
+
+        exp_end_time = time.time()
+        exp_duration = timedelta(seconds=exp_end_time - exp_start_time)
+        print(f"实验 {i + 1} 完成，耗时: {exp_duration}")
+
+    # 检查是否有有效的中介效应结果
+    if not all_classical_mediation:
+        print("\n警告: 没有有效的中介效应结果，将跳过中介效应分析")
+        # 可以在这里决定是继续还是终止程序
+        # sys.exit(1)  # 如果需要终止程序
+
+    # 计算平均值
+    print("\n=== 计算多次实验平均值 ===")
+    avg_results = calculate_averages(all_results)
+
+    # 计算平均中介效应时添加检查
+    avg_mediation = None
+    if all_classical_mediation:
+        try:
+            avg_mediation = calculate_average_classical_mediation(all_classical_mediation)
+        except Exception as e:
+            print(f"计算平均中介效应时出错: {str(e)}")
+
+    # 输出平均结果前先检查模型键是否存在
+    valid_model_keys = [k for k in model_names if k in avg_results]
+    missing_keys = [k for k in model_names if k not in avg_results]
+
+    if missing_keys:
+        print(f"\n警告: 以下模型在结果中未找到，已跳过: {missing_keys}")
+
+    # 输出平均结果（验证集）
+    print("\n=== 各模型平均性能 (验证集) ===")
+    print(f"{'模型名称':<40} | {'MSE':<10} | {'R2':<10} | {'MAE':<10} | {'MedAE':<10}")
+    print("-" * 100)
+    for model_key, model_name in model_names.items():
+        if model_key not in avg_results:
+            continue  # 跳过不存在的模型
+        val_stats = avg_results[model_key]['val']
+        print(
+            f"{model_name:<40} | {val_stats['MSE']:<10.4f} | {val_stats['R2']:<10.4f} | {val_stats['MAE']:<10.4f} | {val_stats['MedAE']:<10.4f}")
+
+    # 输出平均结果（测试集）
+    print("\n=== 各模型平均性能 (测试集) ===")
+    print(f"{'模型名称':<40} | {'MSE':<10} | {'R2':<10} | {'MAE':<10} | {'MedAE':<10}")
+    print("-" * 100)
+    for model_key, model_name in model_names.items():
+        if model_key not in avg_results:
+            continue  # 跳过不存在的模型
+        test_stats = avg_results[model_key]['test']
+        print(
+            f"{model_name:<40} | {test_stats['MSE']:<10.4f} | {test_stats['R2']:<10.4f} | {test_stats['MAE']:<10.4f} | {test_stats['MedAE']:<10.4f}")
+
+    # 输出中介效应结果（添加检查）
+    if avg_mediation is not None:
+        print("\n=== 平均中介效应分析 ===")
+        # 先检查avg_mediation是否为字典
+        if isinstance(avg_mediation, dict):
+            predictors = [k for k in avg_mediation.keys() if k != 'overall']
+            for pred in predictors:
+                print(f"\n预测变量: {pred}")
+                print(f"  总效应: {np.mean(avg_mediation[pred]['total_effect']):.4f}")
+                print(f"  直接效应: {np.mean(avg_mediation[pred]['direct_effect']):.4f}")
+                print(f"  间接效应: {np.mean(avg_mediation[pred]['indirect_effect']):.4f}")
+                print(f"  中介比例: {np.mean(avg_mediation[pred]['mediation_ratio']):.4f}")
+
+                print("  X对中介变量的效应 (a系数):")
+                for m, coefs in avg_mediation[pred]['a_coefs'].items():
+                    print(f"    {m}: {np.mean(coefs):.4f}")
+
+                print("  中介变量对Y的效应 (b系数):")
+                for m, coefs in avg_mediation[pred]['b_coefs'].items():
+                    print(f"    {m}: {np.mean(coefs):.4f}")
+
+            # 输出总体中介效应
+            if 'overall' in avg_mediation:
+                print("\n=== 总体中介效应 ===")
+                print(f"  总效应: {avg_mediation['overall']['total_effect']:.4f}")
+                print(f"  直接效应: {avg_mediation['overall']['direct_effect']:.4f}")
+                print(f"  间接效应: {avg_mediation['overall']['indirect_effect']:.4f}")
+                print(f"  总体中介比例: {avg_mediation['overall']['mediation_ratio']:.4f}")
+        else:
+            print("警告: 中介效应数据格式不正确，无法分析")
+    else:
+        print("\n警告: 没有有效的中介效应数据，跳过中介效应分析")
+
+    # 计算总耗时
+    end_time = time.time()
+    total_duration = timedelta(seconds=end_time - start_time)
+    print(f"\n=== 所有实验完成 ===")
+    print(f"总耗时: {total_duration}")
+    print(f"日志已保存至: {log_filename}")
+
+    # 恢复标准输出
+    sys.stdout = sys.stdout.terminal
+
+
+# 同时，修改calculate_classical_mediation_effects函数添加错误处理
+def calculate_classical_mediation_effects(train_data, predictors, mediators, target):
+    """
+    使用经典系数乘积法计算中介效应
+    遵循Baron & Kenny (1986)的中介效应四步法
+
+    Returns:
+        mediation_results: 包含直接效应、间接效应和总效应的字典
+    """
+    try:
+        # 1. 总效应模型: Y = c*X + e (X对Y的总效应)
+        total_model = LinearRegression()
+        total_model.fit(train_data[predictors], train_data[target])
+        c = total_model.coef_  # 总效应系数
+
+        # 2. 中介模型: M = a*X + e (X对M的效应)
+        a_coefs = {}
+        mediator_models = {}
+        for mediator in mediators:
+            model = LinearRegression()
+            model.fit(train_data[predictors], train_data[mediator])
+            a_coefs[mediator] = model.coef_  # X对中介变量的效应系数
+            mediator_models[mediator] = model
+
+        # 3. 直接效应模型: Y = c'*X + b*M + e (控制M后X对Y的直接效应)
+        direct_model = LinearRegression()
+        direct_features = predictors + mediators
+        direct_model.fit(train_data[direct_features], train_data[target])
+        c_prime = direct_model.coef_[:len(predictors)]  # 控制中介变量后X对Y的直接效应系数
+        b_coefs = {mediators[i]: direct_model.coef_[len(predictors) + i]
+                   for i in range(len(mediators))}  # 中介变量对Y的效应系数
+
+        # 计算各预测变量的中介效应
+        results = {}
+        for i, pred in enumerate(predictors):
+            # 总效应 = c
+            total_effect = c[i]
+
+            # 直接效应 = c'
+            direct_effect = c_prime[i]
+
+            # 间接效应 = a*b (各中介变量的间接效应之和)
+            indirect_effect = 0
+            for mediator in mediators:
+                a = a_coefs[mediator][i]  # X对中介变量的效应
+                b = b_coefs[mediator]  # 中介变量对Y的效应
+                indirect_effect += a * b  # 乘积法则
+
+            # 中介比例 = 间接效应 / 总效应 (若总效应不为零)
+            mediation_ratio = indirect_effect / total_effect if total_effect != 0 else 0
+
+            results[pred] = {
+                'total_effect': total_effect,
+                'direct_effect': direct_effect,
+                'indirect_effect': indirect_effect,
+                'mediation_ratio': mediation_ratio,
+                'a_coefs': {m: a_coefs[m][i] for m in mediators},  # X对各中介变量的效应
+                'b_coefs': {m: b_coefs[m] for m in mediators}  # 各中介变量对Y的效应
+            }
+
+        # 计算总体中介效应
+        total_indirect = sum(results[pred]['indirect_effect'] for pred in predictors)
+        total_total = sum(results[pred]['total_effect'] for pred in predictors)
+        total_direct = sum(results[pred]['direct_effect'] for pred in predictors)
+
+        results['overall'] = {
+            'total_effect': total_total,
+            'direct_effect': total_direct,
+            'indirect_effect': total_indirect,
+            'mediation_ratio': total_indirect / total_total if total_total != 0 else 0
+        }
+
+        return results, {
+            'total_model': total_model,
+            'mediator_models': mediator_models,
+            'direct_model': direct_model
+        }
+    except Exception as e:
+        print(f"计算中介效应时出错: {str(e)}")
+        return None, None
