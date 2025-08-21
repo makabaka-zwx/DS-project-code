@@ -15,7 +15,7 @@ from datetime import timedelta
 
 # 定义种子范围（与RF版本保持一致：基础种子±4，共9个种子）
 base_seed = 2520157
-seeds = [base_seed - 4 + i for i in range(9)]
+seeds = [base_seed]
 print(f"将使用以下种子进行实验: {seeds}")
 
 
