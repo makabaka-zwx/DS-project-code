@@ -1,4 +1,5 @@
 import pandas as pd
+import xgboost as xgb
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -6,7 +7,6 @@ import time
 from datetime import timedelta
 import os
 import openpyxl
-from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split, GridSearchCV, KFold
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error, median_absolute_error
 
@@ -152,14 +152,14 @@ def run_mediation_experiment(seed, data, param_grid):
 
     # 1.1 第一步：用3个打印参数预测宽和高（第一层）
     # 预测宽度
-    rf_width = RandomForestRegressor(random_state=seed)
-    grid_width = GridSearchCV(rf_width, param_grid, cv=KFold(n_splits=5), scoring='neg_mean_squared_error')
+    xgb_width = xgb.XGBRegressor(objective='reg:squarederror', random_state=seed)
+    grid_width = GridSearchCV(xgb_width, param_grid, cv=KFold(n_splits=5), scoring='neg_mean_squared_error')
     grid_width.fit(train_data[predictors], train_data['Width'])
     best_width = grid_width.best_estimator_
 
     # 预测高度
-    rf_height = RandomForestRegressor(random_state=seed)
-    grid_height = GridSearchCV(rf_height, param_grid, cv=KFold(n_splits=5), scoring='neg_mean_squared_error')
+    xgb_height = xgb.XGBRegressor(objective='reg:squarederror', random_state=seed)
+    grid_height = GridSearchCV(xgb_height, param_grid, cv=KFold(n_splits=5), scoring='neg_mean_squared_error')
     grid_height.fit(train_data[predictors], train_data['Height'])
     best_height = grid_height.best_estimator_
 
@@ -192,8 +192,8 @@ def run_mediation_experiment(seed, data, param_grid):
         f"中介模型第二层测试特征数量错误: 应为5，实际为{mediation_test_features.shape[1]}"
 
     # 1.2 第二步：用5个特征预测机械模量（第二层）
-    rf_mediation = RandomForestRegressor(random_state=seed)
-    grid_mediation = GridSearchCV(rf_mediation, param_grid, cv=KFold(n_splits=5), scoring='neg_mean_squared_error')
+    xgb_mediation = xgb.XGBRegressor(objective='reg:squarederror', random_state=seed)
+    grid_mediation = GridSearchCV(xgb_mediation, param_grid, cv=KFold(n_splits=5), scoring='neg_mean_squared_error')
     grid_mediation.fit(mediation_train_features, train_data[target])
     best_mediation = grid_mediation.best_estimator_
 
@@ -204,8 +204,8 @@ def run_mediation_experiment(seed, data, param_grid):
     # --------------------------
     # 2. 直接模型：3个打印参数直接预测机械模量
     # --------------------------
-    rf_direct = RandomForestRegressor(random_state=seed)
-    grid_direct = GridSearchCV(rf_direct, param_grid, cv=KFold(n_splits=5), scoring='neg_mean_squared_error')
+    xgb_direct = xgb.XGBRegressor(objective='reg:squarederror', random_state=seed)
+    grid_direct = GridSearchCV(xgb_direct, param_grid, cv=KFold(n_splits=5), scoring='neg_mean_squared_error')
     grid_direct.fit(train_data[predictors], train_data[target])
     best_direct = grid_direct.best_estimator_
 
@@ -218,8 +218,8 @@ def run_mediation_experiment(seed, data, param_grid):
     # --------------------------
     hybrid_features = predictors + mediators
 
-    rf_hybrid = RandomForestRegressor(random_state=seed)
-    grid_hybrid = GridSearchCV(rf_hybrid, param_grid, cv=KFold(n_splits=5), scoring='neg_mean_squared_error')
+    xgb_hybrid = xgb.XGBRegressor(objective='reg:squarederror', random_state=seed)
+    grid_hybrid = GridSearchCV(xgb_hybrid, param_grid, cv=KFold(n_splits=5), scoring='neg_mean_squared_error')
     grid_hybrid.fit(train_data[hybrid_features], train_data[target])
     best_hybrid = grid_hybrid.best_estimator_
 
@@ -285,13 +285,20 @@ def run_mediation_experiment(seed, data, param_grid):
         }
     }
 
-    # 保存模型
+    # 保存模型和最优参数
     models = {
         'width': best_width,
         'height': best_height,
         'mediation': best_mediation,
         'direct': best_direct,
         'hybrid': best_hybrid,
+        'best_params': {
+            'width': grid_width.best_params_,
+            'height': grid_height.best_params_,
+            'mediation': grid_mediation.best_params_,
+            'direct': grid_direct.best_params_,
+            'hybrid': grid_hybrid.best_params_
+        },
         'features': {
             'predictors': predictors,
             'mediators': mediators,
@@ -306,18 +313,19 @@ def run_mediation_experiment(seed, data, param_grid):
 # 创建输出目录
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("prediction_results", exist_ok=True)
+os.makedirs("XGB_Regression_Comparison", exist_ok=True)
 
 # 开始计时
 start_time = time.time()
 
 # 生成唯一的日志文件名
-base_log_file = "RF_Intermediary_effect_analysis_log.txt"
+base_log_file = "XGB_Intermediary_effect_analysis_log.txt"
 log_file = get_unique_filename(os.path.join("outputs", base_log_file))
 
 # 重定向输出流
 sys.stdout = Logger(log_file)
 
-print(f"开始中介效应分析实验，日志将保存到 {log_file}")
+print(f"开始XGBoost中介效应分析实验，日志将保存到 {log_file}")
 print(f"开始时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 print("=" * 50)
 
@@ -329,21 +337,25 @@ data = data[selected_columns]
 print("数据准备完成:")
 print(f"- 包含的特征: {list(data.columns)}")
 print(f"- 打印参数(自变量): ['printing_temperature', 'feed_rate', 'printing_speed']")
-print(f"- 中介变量: ['Width', 'Height']")
+print(f"- 中介变量: ['Width', 'Height'] (同时作为打印参数的因变量)")
 print(f"- 目标变量: 'Experiment_mean(MPa)'")
+print(f"- 数据集划分比例: 训练集:验证集:测试集 = 7:1.5:1.5 (基于目标变量的分层抽样)")
 
-# 定义参数网格，用于GridSearchCV进行参数调整
+# 定义XGBoost参数网格 - 针对小样本低维度数据优化，减少过拟合
 param_grid = {
     'n_estimators': [50, 100, 200],
-    'max_depth': [None, 5, 10],
-    'min_samples_split': [2, 5, 10],
-    'min_samples_leaf': [1, 2, 4],
-    'max_features': ['sqrt', 'log2']
+    'learning_rate': [0.01, 0.05, 0.1],
+    'max_depth': [3, 4, 5],  # 控制树深度，防止过拟合
+    'min_child_weight': [1, 3, 5],
+    'subsample': [0.8, 0.9, 1.0],  # 样本采样，增加随机性
+    'colsample_bytree': [0.8, 0.9, 1.0],  # 特征采样，增加随机性
+    'reg_alpha': [0, 0.1, 0.5],  # L1正则化
+    'reg_lambda': [0.5, 1.0, 2.0]  # L2正则化，增强泛化能力
 }
 
-# 定义要测试的种子值（原种子±4之内，9次）
+# 定义要测试的种子值（增加随机性检验稳定性）
 base_seed = 2520157
-seeds = [base_seed - 4 + i for i in range(9)]
+seeds = [base_seed - 4 + i for i in range(9)]  # 9次实验验证稳定性
 print(f"\n将使用以下种子进行实验: {seeds}")
 
 # 存储所有实验的结果
@@ -442,7 +454,7 @@ def calculate_mediation_effect(average_results):
     total_effect = average_results['direct']['test']['R2']
 
     # 直接效应 (控制中介变量后的直接效应)
-    # 这里用混合模型与中介模型的差异近似
+    # 用混合模型与中介模型的差异近似
     direct_effect = average_results['hybrid']['test']['R2'] - average_results['mediation']['test']['R2']
 
     # 中介效应 = 总效应 - 直接效应
@@ -470,6 +482,15 @@ print(f"直接效应 (控制宽高后): {mediation_stats['direct_effect']:.4f}")
 print(f"中介效应 (通过宽高): {mediation_stats['mediation_effect']:.4f}")
 print(f"中介比例 (中介效应/总效应): {mediation_stats['mediation_ratio']:.2%}")
 
+# 输出各模型最优参数
+print('\n' + '=' * 50)
+print("各模型最优参数 (最后一次实验):")
+print('=' * 50)
+for model_type, params in final_models['best_params'].items():
+    print(f"\n{model_type}模型最优参数:")
+    for param, value in params.items():
+        print(f"  {param}: {value}")
+
 # 绘制特征重要性分析
 plt.figure(figsize=(18, 6))
 
@@ -492,7 +513,7 @@ plt.ylabel('Importance')
 plt.title('The Importance of the impact of Print Parameters on Height')
 plt.xticks(rotation=45)
 
-# 3. 第二层中介模型的5个特征对机械模量的影响
+# 3. 中介模型第二层的5个特征对机械模量的影响
 plt.subplot(1, 3, 3)
 feature_importance_mediation = final_models['mediation'].feature_importances_
 feature_names_mediation = final_models['features']['mediation_second_layer']
@@ -503,7 +524,7 @@ plt.title('Feature Importance in Second Layer of Mediation Model')
 plt.xticks(rotation=45, ha='right')
 
 plt.tight_layout()
-plt.savefig(os.path.join("outputs", "RF_Intermediary_feature_importance.png"), dpi=300)
+plt.savefig(os.path.join("XGB_Regression_Comparison", "XGB_Intermediary_feature_importance.png"), dpi=300)
 plt.show()
 
 # 绘制三种模型的预测值与真实值对比
@@ -528,7 +549,7 @@ for i, (model_type, name) in enumerate(zip(model_types, model_names), 1):
     plt.grid(alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(os.path.join("outputs", "RF_Intermediary_model_comparison_scatter.png"), dpi=300)
+plt.savefig(os.path.join("XGB_Regression_Comparison", "XGB_Intermediary_model_comparison_scatter.png"), dpi=300)
 plt.show()
 
 # 绘制三种模型的评估指标对比
@@ -558,11 +579,11 @@ for i, metric in enumerate(metrics, 1):
     plt.grid(axis='y', alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(os.path.join("outputs", "RF_Intermediary_model_metrics_comparison.png"), dpi=300)
+plt.savefig(os.path.join("XGB_Regression_Comparison", "XGB_Intermediary_model_metrics_comparison.png"), dpi=300)
 plt.show()
 
 # 导出所有预测结果和平均值到Excel
-output_file = get_unique_filename(os.path.join("prediction_results", "RF_Intermediary_analysis_predictions.xlsx"))
+output_file = get_unique_filename(os.path.join("prediction_results", "XGB_Intermediary_analysis_predictions.xlsx"))
 with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
     # 导出每次实验的预测结果
     for exp_idx, predictions in enumerate(all_predictions):
