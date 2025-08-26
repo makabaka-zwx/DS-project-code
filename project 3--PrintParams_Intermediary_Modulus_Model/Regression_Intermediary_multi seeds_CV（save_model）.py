@@ -711,7 +711,9 @@ def save_statistics_table(stats_results, model_names, output_file):
 if __name__ == "__main__":
     # 创建输出目录
     os.makedirs("outputs", exist_ok=True)
-    os.makedirs("model_parameters", exist_ok=True)  # 新增模型参数保存目录
+    os.makedirs("model_parameters", exist_ok=True)  # 模型参数保存目录
+    # 创建每个模型最佳参数的保存目录
+    os.makedirs(os.path.join("model_parameters", "best_per_model"), exist_ok=True)
 
     # 开始计时
     start_time = time.time()
@@ -816,19 +818,28 @@ if __name__ == "__main__":
     stats_file = get_unique_filename(os.path.join("outputs", "regression_statistics.csv"))
     save_statistics_table(stats_results, model_names, stats_file)
 
-    # 保存最佳模型参数（选择R²最高的模型）
-    best_model_key = max(stats_results.items(), 
-                        key=lambda x: x[1]['test']['R2']['mean'])[0]
-    print(f"\n最佳模型: {model_names[best_model_key]}")
-    print(f"最佳模型测试集R²平均值: {stats_results[best_model_key]['test']['R2']['mean']:.4f}")
 
-    # 保存所有种子的最佳模型参数
-    best_params_dir = os.path.join("model_parameters", best_model_key)
-    os.makedirs(best_params_dir, exist_ok=True)
-    for i, seed_params in enumerate(all_model_params):
-        param_file = os.path.join(best_params_dir, f"seed_{seeds[i]}_params.pkl")
-        joblib.dump(seed_params[best_model_key], param_file)
-    print(f"最佳模型参数已保存到: {best_params_dir}")
+    # 保存每种模型中性能最好的参数（基于测试集R²）
+    print("\n" + "=" * 50)
+    print("保存每种模型中性能最佳的参数...")
+
+    # 为每个模型类型创建子目录
+    for model_key in stats_results:
+        model_dir = os.path.join("model_parameters", "best_per_model", model_key)
+        os.makedirs(model_dir, exist_ok=True)
+
+        # 找出该模型在所有种子中表现最好的一次（基于测试集R²）
+        best_seed_idx = np.argmax([results[model_key]['test']['R2'] for results in results_list])
+        best_seed = seeds[best_seed_idx]
+        best_params = all_model_params[best_seed_idx][model_key]
+
+        # 保存最佳参数
+        param_file = os.path.join(model_dir, f"best_params_seed_{best_seed}.pkl")
+        joblib.dump(best_params, param_file)
+
+        # 输出信息
+        print(f"模型 {model_names[model_key]} 最佳参数 (种子 {best_seed}) 已保存到: {param_file}")
+        print(f"  对应的测试集R²: {results_list[best_seed_idx][model_key]['test']['R2']:.4f}")
 
     # 计算并输出总运行时间
     end_time = time.time()
