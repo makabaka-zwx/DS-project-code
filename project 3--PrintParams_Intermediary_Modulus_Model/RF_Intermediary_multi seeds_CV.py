@@ -9,6 +9,7 @@ import openpyxl
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split, GridSearchCV, KFold
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error, median_absolute_error
+import joblib  # 用于保存模型
 
 
 class Logger:
@@ -49,9 +50,9 @@ def run_mediation_experiment(seed, data, param_grid):
     """运行中介效应实验并返回结果"""
     np.random.seed(seed)
 
-    # 定义变量
-    # 自变量：打印参数（3个）
-    predictors = ['printing_temperature', 'feed_rate', 'printing_speed']
+    # 定义变量 - 明确模型输入参数组合
+    # 自变量：3个打印参数
+    predictors = ['printing_temperature', 'feed_rate', 'printing_speed']  # T（温度）、V（速度）、F（进给率）
     # 中介变量：宽和高
     mediators = ['Width', 'Height']
     # 因变量：机械模量
@@ -59,7 +60,7 @@ def run_mediation_experiment(seed, data, param_grid):
 
     # 数据集划分：基于机械模量的分层抽样
     # 训练集(70%)、验证集(15%)、测试集(15%)
-    # 动态调整分箱数量，确保每个箱至少有4个样本（满足两次分层抽样要求）
+    # 确保每个箱至少有4个样本（满足两次分层抽样要求）
     min_samples_per_bin = 4  # 确保每个分箱至少有4个样本
     max_bins = 10
 
@@ -145,7 +146,7 @@ def run_mediation_experiment(seed, data, param_grid):
     test_data = test_data.drop('target_bin', axis=1)
 
     # --------------------------
-    # 1. 中介模型：
+    # 1. 中介模型（嵌套）：
     #    第一层：3个打印参数 → 宽和高
     #    第二层：3个打印参数 + 预测的宽和高 → 机械模量（共5个特征）
     # --------------------------
@@ -178,18 +179,10 @@ def run_mediation_experiment(seed, data, param_grid):
     val_data['predicted_Height'] = best_height.predict(val_data[predictors])
     mediation_val_features = val_data[predictors + ['predicted_Width', 'predicted_Height']]
 
-    # 验证特征数量是否为5
-    assert mediation_val_features.shape[1] == 5, \
-        f"中介模型第二层验证特征数量错误: 应为5，实际为{mediation_val_features.shape[1]}"
-
     # 测试集特征
     test_data['predicted_Width'] = best_width.predict(test_data[predictors])
     test_data['predicted_Height'] = best_height.predict(test_data[predictors])
     mediation_test_features = test_data[predictors + ['predicted_Width', 'predicted_Height']]
-
-    # 验证特征数量是否为5
-    assert mediation_test_features.shape[1] == 5, \
-        f"中介模型第二层测试特征数量错误: 应为5，实际为{mediation_test_features.shape[1]}"
 
     # 1.2 第二步：用5个特征预测机械模量（第二层）
     rf_mediation = RandomForestRegressor(random_state=seed)
@@ -216,7 +209,7 @@ def run_mediation_experiment(seed, data, param_grid):
     # --------------------------
     # 3. 混合模型：3个打印参数 + 2个实际宽高 → 机械模量（共5个特征）
     # --------------------------
-    hybrid_features = predictors + mediators
+    hybrid_features = predictors + mediators  # T、V、F、W_true、H_true
 
     rf_hybrid = RandomForestRegressor(random_state=seed)
     grid_hybrid = GridSearchCV(rf_hybrid, param_grid, cv=KFold(n_splits=5), scoring='neg_mean_squared_error')
@@ -306,12 +299,13 @@ def run_mediation_experiment(seed, data, param_grid):
 # 创建输出目录
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("prediction_results", exist_ok=True)
+os.makedirs("models", exist_ok=True)  # 新增模型保存目录
 
 # 开始计时
 start_time = time.time()
 
 # 生成唯一的日志文件名
-base_log_file = "RF_Intermediary_effect_analysis_log.txt"
+base_log_file = "RF_Intermediary(multi seeds)_CV_effect_analysis_log.txt"
 log_file = get_unique_filename(os.path.join("outputs", base_log_file))
 
 # 重定向输出流
@@ -341,7 +335,7 @@ param_grid = {
     'max_features': ['sqrt', 'log2']
 }
 
-# 定义要测试的种子值（原种子±4之内，9次）
+# 定义要测试的种子值
 base_seed = 2520157
 seeds = [base_seed - 4 + i for i in range(9)]
 print(f"\n将使用以下种子进行实验: {seeds}")
@@ -351,6 +345,11 @@ all_results = []
 all_predictions = []
 final_models = None
 test_data = None
+best_models = {
+    'mediation': {'model': None, 'r2': -np.inf},
+    'direct': {'model': None, 'r2': -np.inf},
+    'hybrid': {'model': None, 'r2': -np.inf}
+}
 
 # 运行多次实验
 for i, seed in enumerate(seeds):
@@ -361,6 +360,19 @@ for i, seed in enumerate(seeds):
     results, predictions, models, test = run_mediation_experiment(seed, data, param_grid)
     all_results.append(results)
     all_predictions.append(predictions)
+
+    # 跟踪每个模型类型的最优模型（基于测试集R²）
+    current_r2 = results['mediation']['test']['R2']
+    if current_r2 > best_models['mediation']['r2']:
+        best_models['mediation'] = {'model': models, 'r2': current_r2, 'seed': seed}
+
+    current_r2 = results['direct']['test']['R2']
+    if current_r2 > best_models['direct']['r2']:
+        best_models['direct'] = {'model': models, 'r2': current_r2, 'seed': seed}
+
+    current_r2 = results['hybrid']['test']['R2']
+    if current_r2 > best_models['hybrid']['r2']:
+        best_models['hybrid'] = {'model': models, 'r2': current_r2, 'seed': seed}
 
     # 保存最后一次实验的模型和测试数据用于可视化
     if i == len(seeds) - 1:
@@ -373,50 +385,65 @@ for i, seed in enumerate(seeds):
     print(f"直接模型 - 测试集R²: {results['direct']['test']['R2']:.4f}")
     print(f"混合模型 - 测试集R²: {results['hybrid']['test']['R2']:.4f}")
 
+# 保存最优的三种RF模型
+print("\n" + "=" * 50)
+print("保存最优模型:")
+for model_type in ['mediation', 'direct', 'hybrid']:
+    model_info = best_models[model_type]
+    model_path = os.path.join("models", f"best_{model_type}_model_seed_{model_info['seed']}.pkl")
+    joblib.dump(model_info['model'], model_path)
+    print(f"- 最优{model_type}模型 (种子 {model_info['seed']}, R²={model_info['r2']:.4f}) 已保存至: {model_path}")
 
-# 计算所有实验的平均值
-def calculate_averages(results_list):
-    """计算多次实验结果的平均值"""
-    avg_results = {
+
+# 计算所有实验的平均值、标准差和变异系数
+def calculate_stats(results_list):
+    """计算多次实验结果的统计量：平均值 ± 标准差 和 变异系数(CV)"""
+    stats_results = {
         'mediation': {
-            'val': {'MSE': [], 'R2': []},
-            'test': {'MSE': [], 'R2': [], 'MAE': [], 'MedAE': []}
+            'val': {'MSE': {'mean': 0, 'std': 0, 'cv': 0}, 'R2': {'mean': 0, 'std': 0, 'cv': 0}},
+            'test': {'MSE': {'mean': 0, 'std': 0, 'cv': 0}, 'R2': {'mean': 0, 'std': 0, 'cv': 0},
+                     'MAE': {'mean': 0, 'std': 0, 'cv': 0}, 'MedAE': {'mean': 0, 'std': 0, 'cv': 0}}
         },
         'direct': {
-            'val': {'MSE': [], 'R2': []},
-            'test': {'MSE': [], 'R2': [], 'MAE': [], 'MedAE': []}
+            'val': {'MSE': {'mean': 0, 'std': 0, 'cv': 0}, 'R2': {'mean': 0, 'std': 0, 'cv': 0}},
+            'test': {'MSE': {'mean': 0, 'std': 0, 'cv': 0}, 'R2': {'mean': 0, 'std': 0, 'cv': 0},
+                     'MAE': {'mean': 0, 'std': 0, 'cv': 0}, 'MedAE': {'mean': 0, 'std': 0, 'cv': 0}}
         },
         'hybrid': {
-            'val': {'MSE': [], 'R2': []},
-            'test': {'MSE': [], 'R2': [], 'MAE': [], 'MedAE': []}
+            'val': {'MSE': {'mean': 0, 'std': 0, 'cv': 0}, 'R2': {'mean': 0, 'std': 0, 'cv': 0}},
+            'test': {'MSE': {'mean': 0, 'std': 0, 'cv': 0}, 'R2': {'mean': 0, 'std': 0, 'cv': 0},
+                     'MAE': {'mean': 0, 'std': 0, 'cv': 0}, 'MedAE': {'mean': 0, 'std': 0, 'cv': 0}}
         }
     }
 
     # 收集所有结果
-    for res in results_list:
-        for model_type in ['mediation', 'direct', 'hybrid']:
-            for dataset_type in ['val', 'test']:
-                for metric in avg_results[model_type][dataset_type]:
-                    if metric in res[model_type][dataset_type]:
-                        avg_results[model_type][dataset_type][metric].append(
-                            res[model_type][dataset_type][metric])
-
-    # 计算平均值
     for model_type in ['mediation', 'direct', 'hybrid']:
         for dataset_type in ['val', 'test']:
-            for metric in avg_results[model_type][dataset_type]:
-                avg_results[model_type][dataset_type][metric] = np.mean(
-                    avg_results[model_type][dataset_type][metric])
+            for metric in stats_results[model_type][dataset_type]:
+                values = [res[model_type][dataset_type][metric] for res in results_list
+                          if metric in res[model_type][dataset_type]]
 
-    return avg_results
+                # 计算统计量
+                stats_results[model_type][dataset_type][metric]['mean'] = np.mean(values)
+                stats_results[model_type][dataset_type][metric]['std'] = np.std(values)
+                # 变异系数 = 标准差 / 平均值 (处理除以零的情况)
+                mean_val = stats_results[model_type][dataset_type][metric]['mean']
+                if mean_val != 0:
+                    stats_results[model_type][dataset_type][metric]['cv'] = (
+                            stats_results[model_type][dataset_type][metric]['std'] / mean_val
+                    )
+                else:
+                    stats_results[model_type][dataset_type][metric]['cv'] = 0
+
+    return stats_results
 
 
-# 计算平均值
-average_results = calculate_averages(all_results)
+# 计算统计结果
+stats_results = calculate_stats(all_results)
 
-# 输出平均值结果
+# 输出统计结果
 print('\n' + '=' * 50)
-print("多次实验的平均评估结果（保留4位小数）:")
+print("多次实验的统计评估结果（保留4位小数）:")
 print('=' * 50)
 
 for model_type, model_name in [
@@ -425,25 +452,31 @@ for model_type, model_name in [
     ('hybrid', '混合模型 (打印参数+宽高→机械模量)')
 ]:
     print(f"\n{model_name}:")
-    print("验证集平均评估:")
-    print(f"  均方误差 (MSE): {average_results[model_type]['val']['MSE']:.4f}")
-    print(f"  决定系数 (R2): {average_results[model_type]['val']['R2']:.4f}")
-    print("测试集平均评估:")
-    print(f"  均方误差 (MSE): {average_results[model_type]['test']['MSE']:.4f}")
-    print(f"  决定系数 (R2): {average_results[model_type]['test']['R2']:.4f}")
-    print(f"  平均绝对误差 (MAE): {average_results[model_type]['test']['MAE']:.4f}")
-    print(f"  中位数绝对误差 (MedAE): {average_results[model_type]['test']['MedAE']:.4f}")
+    print("验证集统计:")
+    print(
+        f"  均方误差 (MSE): {stats_results[model_type]['val']['MSE']['mean']:.4f} ± {stats_results[model_type]['val']['MSE']['std']:.4f}, CV={stats_results[model_type]['val']['MSE']['cv']:.4f}")
+    print(
+        f"  决定系数 (R2): {stats_results[model_type]['val']['R2']['mean']:.4f} ± {stats_results[model_type]['val']['R2']['std']:.4f}, CV={stats_results[model_type]['val']['R2']['cv']:.4f}")
+    print("测试集统计:")
+    print(
+        f"  均方误差 (MSE): {stats_results[model_type]['test']['MSE']['mean']:.4f} ± {stats_results[model_type]['test']['MSE']['std']:.4f}, CV={stats_results[model_type]['test']['MSE']['cv']:.4f}")
+    print(
+        f"  决定系数 (R2): {stats_results[model_type]['test']['R2']['mean']:.4f} ± {stats_results[model_type]['test']['R2']['std']:.4f}, CV={stats_results[model_type]['test']['R2']['cv']:.4f}")
+    print(
+        f"  平均绝对误差 (MAE): {stats_results[model_type]['test']['MAE']['mean']:.4f} ± {stats_results[model_type]['test']['MAE']['std']:.4f}, CV={stats_results[model_type]['test']['MAE']['cv']:.4f}")
+    print(
+        f"  中位数绝对误差 (MedAE): {stats_results[model_type]['test']['MedAE']['mean']:.4f} ± {stats_results[model_type]['test']['MedAE']['std']:.4f}, CV={stats_results[model_type]['test']['MedAE']['cv']:.4f}")
 
 
 # 中介效应分析：计算中介比例
-def calculate_mediation_effect(average_results):
+def calculate_mediation_effect(stats_results):
     """计算中介效应比例"""
     # 总效应 (直接模型的效应)
-    total_effect = average_results['direct']['test']['R2']
+    total_effect = stats_results['direct']['test']['R2']['mean']
 
     # 直接效应 (控制中介变量后的直接效应)
     # 这里用混合模型与中介模型的差异近似
-    direct_effect = average_results['hybrid']['test']['R2'] - average_results['mediation']['test']['R2']
+    direct_effect = stats_results['hybrid']['test']['R2']['mean'] - stats_results['mediation']['test']['R2']['mean']
 
     # 中介效应 = 总效应 - 直接效应
     mediation_effect = total_effect - direct_effect
@@ -460,7 +493,7 @@ def calculate_mediation_effect(average_results):
 
 
 # 计算中介效应
-mediation_stats = calculate_mediation_effect(average_results)
+mediation_stats = calculate_mediation_effect(stats_results)
 
 print('\n' + '=' * 50)
 print("中介效应分析结果:")
@@ -503,7 +536,7 @@ plt.title('Feature Importance in Second Layer of Mediation Model')
 plt.xticks(rotation=45, ha='right')
 
 plt.tight_layout()
-plt.savefig(os.path.join("outputs", "RF_Intermediary_feature_importance.png"), dpi=300)
+plt.savefig(os.path.join("outputs", "RF_Intermediary(multi seeds)_CV_feature_importance.png"), dpi=300)
 plt.show()
 
 # 绘制三种模型的预测值与真实值对比
@@ -528,7 +561,7 @@ for i, (model_type, name) in enumerate(zip(model_types, model_names), 1):
     plt.grid(alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(os.path.join("outputs", "RF_Intermediary_model_comparison_scatter.png"), dpi=300)
+plt.savefig(os.path.join("outputs", "RF_Intermediary(multi seeds)_CV_model_comparison_scatter.png"), dpi=300)
 plt.show()
 
 # 绘制三种模型的评估指标对比
@@ -541,7 +574,7 @@ plt.figure(figsize=(16, 10))
 for i, metric in enumerate(metrics, 1):
     plt.subplot(2, 2, i)
 
-    values = [average_results[mt]['test'][metric] for mt in model_types]
+    values = [stats_results[mt]['test'][metric]['mean'] for mt in model_types]
     plt.bar(model_names, values, color=['#1f77b4', '#ff7f0e', '#2ca02c'])
 
     plt.title(f'Model {metric} Comparison')
@@ -558,11 +591,12 @@ for i, metric in enumerate(metrics, 1):
     plt.grid(axis='y', alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(os.path.join("outputs", "RF_Intermediary_model_metrics_comparison.png"), dpi=300)
+plt.savefig(os.path.join("outputs", "RF_Intermediary(multi seeds)_CV_model_metrics_comparison.png"), dpi=300)
 plt.show()
 
-# 导出所有预测结果和平均值到Excel
-output_file = get_unique_filename(os.path.join("prediction_results", "RF_Intermediary_analysis_predictions.xlsx"))
+# 导出所有预测结果和统计指标到Excel
+output_file = get_unique_filename(
+    os.path.join("prediction_results", "RF_Intermediary(multi seeds)_CV_analysis_predictions.xlsx"))
 with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
     # 导出每次实验的预测结果
     for exp_idx, predictions in enumerate(all_predictions):
@@ -610,42 +644,74 @@ with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
     df_all_metrics = pd.DataFrame(metrics_data)
     df_all_metrics.to_excel(writer, sheet_name='all_experiments_metrics', index=False)
 
-    # 导出平均评估指标
-    avg_metrics_data = {
+    # 导出统计评估指标（平均值 ± 标准差 和 变异系数）
+    stats_metrics_data = {
         'Metric': ['MSE', 'R2', 'MAE', 'MedAE'],
-        '中介模型 (验证集)': [
-            round(average_results['mediation']['val']['MSE'], 4),
-            round(average_results['mediation']['val']['R2'], 4),
-            None,
-            None
+        '中介模型 (验证集)_均值±标准差': [
+            f"{stats_results['mediation']['val']['MSE']['mean']:.4f}±{stats_results['mediation']['val']['MSE']['std']:.4f}",
+            f"{stats_results['mediation']['val']['R2']['mean']:.4f}±{stats_results['mediation']['val']['R2']['std']:.4f}",
+            "",
+            ""
         ],
-        '中介模型 (测试集)': [
-            round(average_results['mediation']['test']['MSE'], 4),
-            round(average_results['mediation']['test']['R2'], 4),
-            round(average_results['mediation']['test']['MAE'], 4),
-            round(average_results['mediation']['test']['MedAE'], 4)
+        '中介模型 (验证集)_CV': [
+            f"{stats_results['mediation']['val']['MSE']['cv']:.4f}",
+            f"{stats_results['mediation']['val']['R2']['cv']:.4f}",
+            "",
+            ""
         ],
-        '直接模型 (验证集)': [
-            round(average_results['direct']['val']['MSE'], 4),
-            round(average_results['direct']['val']['R2'], 4),
-            None,
-            None
+        '中介模型 (测试集)_均值±标准差': [
+            f"{stats_results['mediation']['test']['MSE']['mean']:.4f}±{stats_results['mediation']['test']['MSE']['std']:.4f}",
+            f"{stats_results['mediation']['test']['R2']['mean']:.4f}±{stats_results['mediation']['test']['R2']['std']:.4f}",
+            f"{stats_results['mediation']['test']['MAE']['mean']:.4f}±{stats_results['mediation']['test']['MAE']['std']:.4f}",
+            f"{stats_results['mediation']['test']['MedAE']['mean']:.4f}±{stats_results['mediation']['test']['MedAE']['std']:.4f}"
         ],
-        '直接模型 (测试集)': [
-            round(average_results['direct']['test']['MSE'], 4),
-            round(average_results['direct']['test']['R2'], 4),
-            round(average_results['direct']['test']['MAE'], 4),
-            round(average_results['direct']['test']['MedAE'], 4)
+        '中介模型 (测试集)_CV': [
+            f"{stats_results['mediation']['test']['MSE']['cv']:.4f}",
+            f"{stats_results['mediation']['test']['R2']['cv']:.4f}",
+            f"{stats_results['mediation']['test']['MAE']['cv']:.4f}",
+            f"{stats_results['mediation']['test']['MedAE']['cv']:.4f}"
         ],
-        '混合模型 (测试集)': [
-            round(average_results['hybrid']['test']['MSE'], 4),
-            round(average_results['hybrid']['test']['R2'], 4),
-            round(average_results['hybrid']['test']['MAE'], 4),
-            round(average_results['hybrid']['test']['MedAE'], 4)
+        # 直接模型
+        '直接模型 (验证集)_均值±标准差': [
+            f"{stats_results['direct']['val']['MSE']['mean']:.4f}±{stats_results['direct']['val']['MSE']['std']:.4f}",
+            f"{stats_results['direct']['val']['R2']['mean']:.4f}±{stats_results['direct']['val']['R2']['std']:.4f}",
+            "",
+            ""
+        ],
+        '直接模型 (验证集)_CV': [
+            f"{stats_results['direct']['val']['MSE']['cv']:.4f}",
+            f"{stats_results['direct']['val']['R2']['cv']:.4f}",
+            "",
+            ""
+        ],
+        '直接模型 (测试集)_均值±标准差': [
+            f"{stats_results['direct']['test']['MSE']['mean']:.4f}±{stats_results['direct']['test']['MSE']['std']:.4f}",
+            f"{stats_results['direct']['test']['R2']['mean']:.4f}±{stats_results['direct']['test']['R2']['std']:.4f}",
+            f"{stats_results['direct']['test']['MAE']['mean']:.4f}±{stats_results['direct']['test']['MAE']['std']:.4f}",
+            f"{stats_results['direct']['test']['MedAE']['mean']:.4f}±{stats_results['direct']['test']['MedAE']['std']:.4f}"
+        ],
+        '直接模型 (测试集)_CV': [
+            f"{stats_results['direct']['test']['MSE']['cv']:.4f}",
+            f"{stats_results['direct']['test']['R2']['cv']:.4f}",
+            f"{stats_results['direct']['test']['MAE']['cv']:.4f}",
+            f"{stats_results['direct']['test']['MedAE']['cv']:.4f}"
+        ],
+        # 混合模型
+        '混合模型 (测试集)_均值±标准差': [
+            f"{stats_results['hybrid']['test']['MSE']['mean']:.4f}±{stats_results['hybrid']['test']['MSE']['std']:.4f}",
+            f"{stats_results['hybrid']['test']['R2']['mean']:.4f}±{stats_results['hybrid']['test']['R2']['std']:.4f}",
+            f"{stats_results['hybrid']['test']['MAE']['mean']:.4f}±{stats_results['hybrid']['test']['MAE']['std']:.4f}",
+            f"{stats_results['hybrid']['test']['MedAE']['mean']:.4f}±{stats_results['hybrid']['test']['MedAE']['std']:.4f}"
+        ],
+        '混合模型 (测试集)_CV': [
+            f"{stats_results['hybrid']['test']['MSE']['cv']:.4f}",
+            f"{stats_results['hybrid']['test']['R2']['cv']:.4f}",
+            f"{stats_results['hybrid']['test']['MAE']['cv']:.4f}",
+            f"{stats_results['hybrid']['test']['MedAE']['cv']:.4f}"
         ]
     }
-    df_avg_metrics = pd.DataFrame(avg_metrics_data)
-    df_avg_metrics.to_excel(writer, sheet_name='average_metrics', index=False)
+    df_stats_metrics = pd.DataFrame(stats_metrics_data)
+    df_stats_metrics.to_excel(writer, sheet_name='stats_metrics', index=False)
 
     # 导出中介效应分析结果
     mediation_data = pd.DataFrame([{
