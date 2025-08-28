@@ -3,22 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>骨支架打印参数模拟器</title>
+    <title>骨支架打印参数预测系统</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
 
-    <!-- Tailwind 配置 -->
+    <!-- Tailwind配置 -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        primary: '#3B82F6',
-                        secondary: '#10B981',
-                        accent: '#8B5CF6',
+                        garf: '#3B82F6',    // GA-RF模型色
+                        regression: '#10B981',// 回归模型色
+                        rf: '#8B5CF6',       // 随机森林模型色
                         neutral: '#1F2937',
-                        'neutral-light': '#F3F4F6',
+                        'neutral-light': '#F3F4F6'
                     },
                     fontFamily: {
                         sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -30,30 +30,25 @@
 
     <style type="text/tailwindcss">
         @layer utilities {
-            .content-auto {
-                content-visibility: auto;
-            }
-            .card-shadow {
-                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            }
-            .gradient-bg {
-                background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
-            }
+            .content-auto { content-visibility: auto; }
+            .card-shadow { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+            .gradient-bg { background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%); }
+            .feat-badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium; }
         }
     </style>
 </head>
 <body class="bg-gray-50 font-sans text-neutral">
     <div class="min-h-screen flex flex-col">
-        <!-- 顶部导航栏 -->
+        <!-- 顶部导航 -->
         <header class="gradient-bg text-white shadow-lg">
             <div class="container mx-auto px-4 py-6">
-                <div class="flex justify-between items-center">
-                    <div class="flex items-center space-x-2">
-                        <i class="fa fa-calculator text-2xl"></i>
-                        <h1 class="text-2xl md:text-3xl font-bold">骨支架打印参数模拟器</h1>
+                <div class="flex flex-col md:flex-row justify-between items-center">
+                    <div class="flex items-center space-x-3 mb-4 md:mb-0">
+                        <i class="fa fa-cogs text-2xl"></i>
+                        <h1 class="text-2xl md:text-3xl font-bold">骨支架打印参数预测系统</h1>
                     </div>
-                    <div class="hidden md:block">
-                        <p class="opacity-90">基于本地模型的打印参数反推工具</p>
+                    <div class="text-sm opacity-90">
+                        支持9种模型 | 预计算10000次采样 | 精准参数推荐
                     </div>
                 </div>
             </div>
@@ -62,216 +57,237 @@
         <!-- 主要内容区 -->
         <main class="flex-grow container mx-auto px-4 py-8">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <!-- 左侧输入面板 -->
+                <!-- 左侧：参数输入面板 -->
                 <div class="lg:col-span-1">
                     <div class="bg-white rounded-xl shadow-lg p-6 transition-all duration-300 hover:shadow-xl">
-                        <h2 class="text-xl font-bold mb-6 text-primary flex items-center">
-                            <i class="fa fa-sliders mr-2"></i>参数设置
+                        <h2 class="text-xl font-bold mb-6 flex items-center text-garf">
+                            <i class="fa fa-sliders mr-2"></i>参数配置
                         </h2>
 
-                        <form id="calculationForm" class="space-y-5">
+                        <form id="queryForm" class="space-y-6">
+                            <!-- 1. 模型选择 -->
                             <div>
-                                <label for="model" class="block text-sm font-medium text-gray-700 mb-1">选择模型</label>
-                                <select id="model" name="model" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all">
-                                    {{ model_options }}
-                                </select>
-                            </div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    模型类型选择
+                                </label>
+                                <!-- 模型类型标签页 -->
+                                <ul class="nav nav-tabs mb-3" id="modelTypeTabs" role="tablist">
+                                    {% for group_name, model_keys in model_groups.items() %}
+                                    <li class="nav-item" role="presentation">
+                                        <button
+                                            class="nav-link {% if loop.first %}active{% endif %}"
+                                            id="{{ group_name|lower|replace(' ', '-') }}-tab"
+                                            data-bs-toggle="tab"
+                                            data-bs-target="#{{ group_name|lower|replace(' ', '-') }}"
+                                            type="button"
+                                            role="tab"
+                                        >
+                                            {{ group_name }}
+                                        </button>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
 
-                            <div>
-                                <label for="targetY" class="block text-sm font-medium text-gray-700 mb-1">目标y值</label>
-                                <input type="number" id="targetY" name="targetY" step="0.01"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
-                                    placeholder="输入想要得到的机械模量(y值)" required>
-                            </div>
+                                <!-- 模型列表 -->
+                                <div class="tab-content" id="modelTypeTabsContent">
+                                    {% for group_name, model_keys in model_groups.items() %}
+                                    <div
+                                        class="tab-pane fade {% if loop.first %}show active{% endif %}"
+                                        id="{{ group_name|lower|replace(' ', '-') }}"
+                                        role="tabpanel"
+                                    >
+                                        <select
+                                            class="model-select w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-garf focus:border-garf transition-all"
+                                            data-group="{{ group_name }}"
+                                        >
+                                            <option value="">-- 选择具体模型 --</option>
+                                            {% for key in model_keys %}
+                                            {% set model = model_metadata[key] %}
+                                            <option
+                                                value="{{ key }}"
+                                                {% if model.load_error %}disabled{% endif %}
+                                            >
+                                                {{ model.name }}
+                                                {% if model.load_error %}
+                                                <span class="text-red-500">(加载失败)</span>
+                                                {% endif %}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    {% endfor %}
+                                </div>
 
-                            <div>
-                                <label for="tolerance" class="block text-sm font-medium text-gray-700 mb-1">误差容忍度</label>
-                                <div class="flex items-center">
-                                    <input type="number" id="tolerance" name="tolerance" step="0.01" min="0.01" max="100" value="10"
-                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all">
-                                    <span class="ml-2 text-gray-500">允许的误差范围</span>
+                                <!-- 模型信息显示 -->
+                                <div id="modelInfo" class="mt-3 p-3 bg-neutral-light rounded-lg hidden">
+                                    <p class="text-sm text-gray-600">
+                                        <i class="fa fa-info-circle text-garf mr-1"></i>
+                                        <span id="modelDesc">-</span>
+                                    </p>
                                 </div>
                             </div>
 
-                            <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white font-medium py-3 px-4 rounded-lg transition-all duration-300 flex items-center justify-center">
-                                <i class="fa fa-search mr-2"></i>查找可能的打印参数
+                            <!-- 2. 目标机械模量 -->
+                            <div>
+                                <label for="targetModulus" class="block text-sm font-medium text-gray-700 mb-2">
+                                    目标机械模量 (MPa)
+                                </label>
+                                <input
+                                    type="number"
+                                    id="targetModulus"
+                                    name="targetModulus"
+                                    min="{{ target_config.min }}"
+                                    max="{{ target_config.max }}"
+                                    step="{{ target_config.step }}"
+                                    required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-garf focus:border-garf transition-all"
+                                    placeholder="例如：300"
+                                >
+                                <p class="mt-1 text-xs text-gray-500">
+                                    范围：{{ target_config.min }} - {{ target_config.max }} MPa | 精度：{{ target_config.step }} MPa
+                                </p>
+                            </div>
+
+                            <!-- 3. 误差容忍度 -->
+                            <div>
+                                <label for="tolerance" class="block text-sm font-medium text-gray-700 mb-2">
+                                    误差容忍度 (±MPa)
+                                </label>
+                                <input
+                                    type="number"
+                                    id="tolerance"
+                                    name="tolerance"
+                                    min="{{ target_config.tolerance_min }}"
+                                    max="{{ target_config.tolerance_max }}"
+                                    step="0.1"
+                                    value="{{ target_config.tolerance_default }}"
+                                    required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-garf focus:border-garf transition-all"
+                                >
+                                <p class="mt-1 text-xs text-gray-500">
+                                    范围：{{ target_config.tolerance_min }} - {{ target_config.tolerance_max }} MPa | 推荐：1.0 MPa
+                                </p>
+                            </div>
+
+                            <!-- 4. 特征参数输入（动态生成） -->
+                            <div id="featureInputs" class="space-y-4 hidden">
+                                <h3 class="text-sm font-medium text-gray-700 border-b pb-2">模型特征参数</h3>
+                                <!-- 动态生成特征输入框 -->
+                            </div>
+
+                            <!-- 5. 提交按钮 -->
+                            <button
+                                type="submit"
+                                id="queryBtn"
+                                class="w-full bg-garf hover:bg-garf/90 text-white font-medium py-3 px-4 rounded-lg transition-all duration-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled
+                            >
+                                <i class="fa fa-search mr-2"></i>查询参数组合
                             </button>
                         </form>
-
-                        <div class="mt-6 pt-6 border-t border-gray-200">
-                            <h3 class="text-sm font-medium text-gray-500 mb-3">使用说明</h3>
-                            <ul class="text-sm text-gray-600 space-y-2">
-                                <li class="flex items-start">
-                                    <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
-                                    <span>选择一个模型，输入您想要的机械模量（y值）</span>
-                                </li>
-                                <li class="flex items-start">
-                                    <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
-                                    <span>设置误差容忍度，值越大找到的结果可能越多</span>
-                                </li>
-                                <li class="flex items-start">
-                                    <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
-                                    <span>系统会返回可能的参数范围：<br>
-                                        - x1: 打印温度（180–250°C）<br>
-                                        - x2: 打印速度（100–5100 mm/min）<br>
-                                        - x3: 进给率（15–42%）<br>
-                                        示例组合会显示具体数值及计算得到的 y 值
-                                    </span>
-                                </li>
-                            </ul>
-                        </div>
                     </div>
                 </div>
 
-                <!-- 右侧结果展示区 -->
-                <div class="lg:col-span-2">
-                    <div class="bg-white rounded-xl shadow-lg p-6 transition-all duration-300 hover:shadow-xl h-full">
-                        <h2 class="text-xl font-bold mb-6 text-primary flex items-center">
-                            <i class="fa fa-bar-chart mr-2"></i>计算结果
-                        </h2>
+                <!-- 右侧：结果展示区 -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- 状态提示区 -->
+                    <div id="initialState" class="bg-white rounded-xl shadow-lg p-8 text-center">
+                        <i class="fa fa-lightbulb-o text-5xl mb-4 text-gray-300"></i>
+                        <h3 class="text-lg font-medium text-gray-700 mb-2">请完成左侧参数配置</h3>
+                        <p class="text-gray-500">选择模型并输入目标机械模量，系统将基于10000次预计算结果推荐最优参数</p>
+                    </div>
 
-                        <!-- 初始状态提示 -->
-                        <div id="initialState" class="text-center py-16 text-gray-500">
-                            <i class="fa fa-calculator text-5xl mb-4 opacity-30"></i>
-                            <p>请在左侧输入参数并点击"查找可能的x值"按钮</p>
+                    <div id="loadingState" class="bg-white rounded-xl shadow-lg p-8 text-center hidden">
+                        <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-garf mb-4"></div>
+                        <h3 class="text-lg font-medium text-gray-700 mb-2">正在筛选最优参数...</h3>
+                        <p class="text-gray-500">基于预计算的10000次采样结果进行精准匹配</p>
+                    </div>
+
+                    <div id="errorState" class="bg-white rounded-xl shadow-lg p-8 hidden">
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                            <i class="fa fa-exclamation-circle text-red-500 text-3xl mb-2"></i>
+                            <p id="errorMessage" class="text-red-600"></p>
+                        </div>
+                    </div>
+
+                    <!-- 结果展示区 -->
+                    <div id="resultState" class="hidden space-y-6">
+                        <!-- 1. 结果摘要 -->
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <h3 class="text-lg font-bold mb-4 flex items-center text-garf">
+                                <i class="fa fa-bar-chart mr-2"></i>结果摘要
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="flex items-center p-3 bg-neutral-light rounded-lg">                                    <div class="w-10 h-10 rounded-full bg-garf/10 flex items-center justify-center mr-3">
+                                        <i class="fa fa-check text-garf"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm text-gray-500">有效参数组合</p>
+                                        <p id="resultCount" class="font-semibold"></p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center p-3 bg-neutral-light rounded-lg">
+                                    <div class="w-10 h-10 rounded-full bg-rf/10 flex items-center justify-center mr-3">
+                                        <i class="fa fa-database text-rf"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm text-gray-500">总预计算样本</p>
+                                        <p id="totalSamples" class="font-semibold">10000 组</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center p-3 bg-neutral-light rounded-lg">
+                                    <div class="w-10 h-10 rounded-full bg-regression/10 flex items-center justify-center mr-3">
+                                        <i class="fa fa-balance-scale text-regression"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm text-gray-500">查询条件</p>
+                                        <p id="queryCondition" class="font-semibold"></p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- 加载状态 -->
-                        <div id="loadingState" class="hidden text-center py-16">
-                            <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-                            <p class="mt-4 text-gray-600">正在计算可能的x值范围...</p>
+                        <!-- 2. 机械模量分布可视化 -->
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <h3 class="text-lg font-bold mb-4 flex items-center text-garf">
+                                <i class="fa fa-histogram mr-2"></i>机械模量分布
+                            </h3>
+                            <div class="h-64">
+                                <canvas id="modulusDistributionChart"></canvas>
+                            </div>
+                            <p class="mt-3 text-xs text-gray-500">
+                                <span class="text-blue-500">蓝色</span>：全部分布 |
+                                <span class="text-orange-500">橙色</span>：符合条件的分布 |
+                                <span class="text-red-500">红色区域</span>：目标范围
+                            </p>
                         </div>
 
-                        <!-- 错误状态 -->
-                        <div id="errorState" class="hidden py-16">
-                            <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-                                <i class="fa fa-exclamation-circle text-red-500 text-3xl mb-2"></i>
-                                <p id="errorMessage" class="text-red-600"></p>
+                        <!-- 3. 参数范围统计 -->
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <h3 class="text-lg font-bold mb-4 flex items-center text-garf">
+                                <i class="fa fa-range mr-2"></i>参数可能范围
+                            </h3>
+                            <div id="paramRangesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <!-- 动态生成参数范围卡片 -->
                             </div>
                         </div>
 
-                        <!-- 结果状态 -->
-                        <div id="resultState" class="hidden space-y-6">
-                            <!-- 结果摘要 -->
-                            <div class="bg-neutral-light rounded-lg p-4">
-                                <h3 class="font-medium text-gray-700 mb-2">结果摘要</h3>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div class="flex items-center">
-                                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
-                                            <i class="fa fa-check text-primary"></i>
-                                        </div>
-                                        <div>
-                                            <p class="text-sm text-gray-500">找到有效组合</p>
-                                            <p id="resultCount" class="font-semibold"></p>
-                                        </div>
-                                    </div>
-                                    <div class="flex items-center">
-                                        <div class="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center mr-3">
-                                            <i class="fa fa-search text-accent"></i>
-                                        </div>
-                                        <div>
-                                            <p class="text-sm text-gray-500">总采样点数</p>
-                                            <p id="sampledCount" class="font-semibold"></p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- x值范围 -->
-                            <div>
-                                <h3 class="font-medium text-gray-700 mb-4">x值可能范围</h3>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <!-- x1范围 -->
-                                    <div class="border border-gray-200 rounded-lg p-4">
-                                        <div class="flex justify-between items-center mb-2">
-                                            <span class="font-medium text-primary">x1</span>
-                                            <span class="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">范围</span>
-                                        </div>
-                                        <div class="space-y-2">
-                                            <div class="flex justify-between text-sm">
-                                                <span class="text-gray-500">最小值:</span>
-                                                <span id="x1Min" class="font-medium"></span>
-                                            </div>
-                                            <div class="flex justify-between text-sm">
-                                                <span class="text-gray-500">最大值:</span>
-                                                <span id="x1Max" class="font-medium"></span>
-                                            </div>
-                                            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
-                                                <div id="x1Bar" class="bg-primary h-2 rounded-full" style="width: 100%"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- x2范围 -->
-                                    <div class="border border-gray-200 rounded-lg p-4">
-                                        <div class="flex justify-between items-center mb-2">
-                                            <span class="font-medium text-secondary">x2</span>
-                                            <span class="text-xs bg-secondary/10 text-secondary px-2 py-1 rounded-full">范围</span>
-                                        </div>
-                                        <div class="space-y-2">
-                                            <div class="flex justify-between text-sm">
-                                                <span class="text-gray-500">最小值:</span>
-                                                <span id="x2Min" class="font-medium"></span>
-                                            </div>
-                                            <div class="flex justify-between text-sm">
-                                                <span class="text-gray-500">最大值:</span>
-                                                <span id="x2Max" class="font-medium"></span>
-                                            </div>
-                                            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
-                                                <div id="x2Bar" class="bg-secondary h-2 rounded-full" style="width: 100%"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- x3范围 -->
-                                    <div class="border border-gray-200 rounded-lg p-4">
-                                        <div class="flex justify-between items-center mb-2">
-                                            <span class="font-medium text-accent">x3</span>
-                                            <span class="text-xs bg-accent/10 text-accent px-2 py-1 rounded-full">范围</span>
-                                        </div>
-                                        <div class="space-y-2">
-                                            <div class="flex justify-between text-sm">
-                                                <span class="text-gray-500">最小值:</span>
-                                                <span id="x3Min" class="font-medium"></span>
-                                            </div>
-                                            <div class="flex justify-between text-sm">
-                                                <span class="text-gray-500">最大值:</span>
-                                                <span id="x3Max" class="font-medium"></span>
-                                            </div>
-                                            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
-                                                <div id="x3Bar" class="bg-accent h-2 rounded-full" style="width: 100%"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 示例组合 -->
-                            <div>
-                                <h3 class="font-medium text-gray-700 mb-4">示例组合 (x1, x2, x3)</h3>
-                                <div class="overflow-x-auto">
-                                    <table class="min-w-full divide-y divide-gray-200">
-                                        <thead>
-                                            <tr>
-                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">x1: printing_temperature</th>
-                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">x2: printing_speed</th>
-                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">x3: feed_rate</th>
-                                                <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">预计机械模量</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="examplesTable" class="bg-white divide-y divide-gray-200">
-                                            <!-- 示例行会通过JavaScript动态添加 -->
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <!-- 可视化图表 -->
-                            <div>
-                                <h3 class="font-medium text-gray-700 mb-4">x值分布</h3>
-                                <div class="h-64">
-                                    <canvas id="xValuesChart"></canvas>
-                                </div>
+                        <!-- 4. 最优参数组合（前10组） -->
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <h3 class="text-lg font-bold mb-4 flex items-center text-garf">
+                                <i class="fa fa-table mr-2"></i>最优参数组合（按相似度排序）
+                            </h3>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead>
+                                        <tr id="resultsTableHeader">
+                                            <!-- 动态生成表头 -->
+                                        </tr>
+                                    </thead>
+                                    <tbody id="resultsTableBody" class="bg-white divide-y divide-gray-200">
+                                        <!-- 动态生成结果行 -->
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -283,255 +299,415 @@
         <footer class="bg-neutral text-white py-6">
             <div class="container mx-auto px-4">
                 <div class="flex flex-col md:flex-row justify-between items-center">
-                    <p class="text-sm opacity-80">© 2023 y值反推x值计算器 - 本地模型计算工具</p>
-                    <div class="mt-4 md:mt-0 flex space-x-4">
-                        <a href="#" class="text-sm opacity-80 hover:opacity-100 transition-colors">使用帮助</a>
-                        <a href="#" class="text-sm opacity-80 hover:opacity-100 transition-colors">关于模型</a>
-                        <a href="#" class="text-sm opacity-80 hover:opacity-100 transition-colors">联系我们</a>
+                    <p class="text-sm opacity-80 mb-4 md:mb-0">
+                        © 2024 骨支架打印参数预测系统 | 基于9种模型的预计算分析
+                    </p>
+                    <div class="flex space-x-4 text-sm">
+                        <a href="#" class="opacity-80 hover:opacity-100 transition-colors">模型说明</a>
+                        <a href="#" class="opacity-80 hover:opacity-100 transition-colors">使用帮助</a>
+                        <a href="#" class="opacity-80 hover:opacity-100 transition-colors">联系我们</a>
                     </div>
                 </div>
             </div>
         </footer>
     </div>
 
+    <!-- 外部依赖 -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // 全局变量
-        let xValuesChart = null;
+        let selectedModelKey = null;
+        let modulusChart = null;
+        const TARGET_CONFIG = {{ target_config|tojson }};
+        const MODEL_METADATA = {{ model_metadata|tojson }};
 
-        // DOM 加载完成后执行
+        // DOM加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
-            const form = document.getElementById('calculationForm');
+            const queryForm = document.getElementById('queryForm');
+            const modelSelects = document.querySelectorAll('.model-select');
+            const modelInfo = document.getElementById('modelInfo');
+            const modelDesc = document.getElementById('modelDesc');
+            const featureInputs = document.getElementById('featureInputs');
+            const queryBtn = document.getElementById('queryBtn');
+            const targetModulus = document.getElementById('targetModulus');
+            const tolerance = document.getElementById('tolerance');
 
-            // 表单提交事件
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                calculatePossibleXValues();
+            // 1. 模型选择逻辑
+            modelSelects.forEach(select => {
+                select.addEventListener('change', function() {
+                    selectedModelKey = this.value;
+
+                    // 同步所有选择器（确保只有一个模型被选中）
+                    modelSelects.forEach(s => {
+                        if (s !== this) s.value = '';
+                    });
+
+                    if (selectedModelKey) {
+                        // 显示模型信息
+                        const model = MODEL_METADATA[selectedModelKey];
+                        modelDesc.textContent = model.desc;
+                        modelInfo.classList.remove('hidden');
+
+                        // 获取模型特征并生成输入框
+                        fetch('/get_model_features', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ model_key: selectedModelKey })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                generateFeatureInputs(data.features);
+                                featureInputs.classList.remove('hidden');
+                                queryBtn.disabled = false;
+                            } else {
+                                showError(data.error);
+                                featureInputs.classList.add('hidden');
+                                queryBtn.disabled = true;
+                            }
+                        })
+                        .catch(err => {
+                            showError(`获取模型特征失败：${err.message}`);
+                            featureInputs.classList.add('hidden');
+                            queryBtn.disabled = true;
+                        });
+                    } else {
+                        // 未选择模型
+                        modelInfo.classList.add('hidden');
+                        featureInputs.classList.add('hidden');
+                        queryBtn.disabled = true;
+                    }
+                });
             });
-        });
 
-        // 计算可能的x值范围
-        function calculatePossibleXValues() {
-            // 获取表单数据
-            const targetY = parseFloat(document.getElementById('targetY').value);
-            const model = document.getElementById('model').value;
-            const tolerance = parseFloat(document.getElementById('tolerance').value);
-
-            // 显示加载状态
-            showState('loadingState');
-
-            // 发送请求到后端
-            fetch('/calculate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    target_y: targetY,
-                    model: model,
-                    tolerance: tolerance
-                })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('网络响应不正常');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) {
-                    showError(data.error);
+            // 2. 表单提交逻辑
+            queryForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                if (!selectedModelKey) {
+                    showError('请先选择一个模型');
                     return;
                 }
 
-                if (data.found) {
-                    displayResults(data);
-                } else {
-                    showError(data.message);
-                }
-            })
-            .catch(error => {
-                showError('计算过程中发生错误: ' + error.message);
+                const queryData = {
+                    model_key: selectedModelKey,
+                    target_modulus: parseFloat(targetModulus.value),
+                    tolerance: parseFloat(tolerance.value)
+                };
+
+                // 显示加载状态
+                showState('loadingState');
+
+                // 发送查询请求
+                fetch('/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(queryData)
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.found) {
+                            renderResults(data);
+                        } else {
+                            showError(data.message);
+                        }
+                    } else {
+                        showError(data.error);
+                    }
+                })
+                .catch(err => {
+                    showError(`查询失败：${err.message}`);
+                });
+            });
+
+            // 3. 初始化目标值和容忍度的范围限制
+            targetModulus.addEventListener('input', function() {
+                this.value = Math.max(TARGET_CONFIG.min, Math.min(TARGET_CONFIG.max, this.value));
+            });
+
+            tolerance.addEventListener('input', function() {
+                this.value = Math.max(TARGET_CONFIG.tolerance_min, Math.min(TARGET_CONFIG.tolerance_max, this.value));
+            });
+        });
+
+        // 生成特征输入框
+        function generateFeatureInputs(features) {
+            const container = document.getElementById('featureInputs');
+            // 清空原有内容（保留标题）
+            const title = container.querySelector('h3');
+            container.innerHTML = '';
+            container.appendChild(title);
+
+            features.forEach(feat => {
+                const featGroup = document.createElement('div');
+                featGroup.className = 'space-y-1';
+
+                // 输入框标签
+                const label = document.createElement('label');
+                label.className = 'block text-xs font-medium text-gray-600';
+                label.textContent = `${feat.name}（${feat.min}-${feat.max}，精度${feat.step}）`;
+
+                // 输入框
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.className = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-garf focus:border-garf transition-all text-sm';
+                input.name = `feat_${feat.key}`;
+                input.dataset.featKey = feat.key;
+                input.min = feat.min;
+                input.max = feat.max;
+                input.step = feat.step;
+                input.placeholder = `输入${feat.name}`;
+
+                // 精度提示
+                const hint = document.createElement('p');
+                hint.className = 'text-xs text-gray-500';
+                hint.textContent = `范围：${feat.min} - ${feat.max} | 精度：${feat.step}`;
+
+                featGroup.appendChild(label);
+                featGroup.appendChild(input);
+                featGroup.appendChild(hint);
+                container.appendChild(featGroup);
             });
         }
 
-        // 显示指定的状态区域
-        function showState(stateId) {
-            document.getElementById('initialState').classList.add('hidden');
-            document.getElementById('loadingState').classList.add('hidden');
-            document.getElementById('errorState').classList.add('hidden');
-            document.getElementById('resultState').classList.add('hidden');
+        // 渲染查询结果
+        function renderResults(data) {
+            // 切换到结果状态
+            showState('resultState');
 
-            document.getElementById(stateId).classList.remove('hidden');
+            // 1. 更新结果摘要
+            document.getElementById('resultCount').textContent = `${data.total_filtered} 组`;
+            document.getElementById('queryCondition').textContent =
+                `${data.target_modulus} ±${data.tolerance} MPa`;
+
+            // 2. 渲染机械模量分布图表
+            renderModulusChart(data.visual_data);
+
+            // 3. 渲染参数范围统计
+            renderParamRanges(data.param_ranges);
+
+            // 4. 渲染前10组结果表格
+            renderResultsTable(data.top_10_results);
         }
 
-        // 显示错误信息
+        // 渲染机械模量分布图表
+        function renderModulusChart(visualData) {
+            const ctx = document.getElementById('modulusDistributionChart').getContext('2d');
+
+            // 销毁原有图表
+            if (modulusChart) {
+                modulusChart.destroy();
+            }
+
+            // 计算直方图数据
+            const allBins = getHistogramBins(visualData.all_modulus, 50);
+            const filteredBins = getHistogramBins(visualData.filtered_modulus, 50);
+
+            modulusChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: allBins.labels,
+                    datasets: [
+                        {
+                            label: '全部分布',
+                            data: allBins.counts,
+                            backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 1,
+                            order: 2
+                        },
+                        {
+                            label: '符合条件的分布',
+                            data: filteredBins.counts,
+                            backgroundColor: 'rgba(249, 115, 22, 0.7)',
+                            borderColor: 'rgba(249, 115, 22, 1)',
+                            borderWidth: 1,
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: { display: true, text: '机械模量 (MPa)' },
+                            min: Math.min(...visualData.all_modulus) - 20,
+                            max: Math.max(...visualData.all_modulus) + 20,
+                            grid: { display: false }
+                        },
+                        y: {
+                            title: { display: true, text: '频数' },
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        annotation: {
+                            annotations: {
+                                targetRange: {
+                                    type: 'rect',
+                                    xMin: visualData.target_range[0],
+                                    xMax: visualData.target_range[1],
+                                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                    borderColor: 'rgba(239, 68, 68, 0.3)',
+                                    borderWidth: 1,
+                                    order: 3
+                                }
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                }
+            });
+        }
+
+        // 渲染参数范围统计
+        function renderParamRanges(paramRanges) {
+            const container = document.getElementById('paramRangesContainer');
+            container.innerHTML = '';
+
+            Object.entries(paramRanges).forEach(([paramName, stats]) => {
+                const card = document.createElement('div');
+                card.className = 'border border-gray-200 rounded-lg p-4';
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="font-medium text-gray-800">${paramName}</span>
+                        <span class="text-xs bg-garf/10 text-garf px-2 py-0.5 rounded">
+                            ${stats.count} 组样本
+                        </span>
+                    </div>
+                    <div class="space-y-1 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">最小值：</span>
+                            <span class="font-medium">${stats.min}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">最大值：</span>
+                            <span class="font-medium">${stats.max}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">平均值：</span>
+                            <span class="font-medium">${stats.avg}</span>
+                        </div>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2 mt-3">
+                        <div class="bg-garf h-2 rounded-full" style="width: 100%"></div>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        // 渲染结果表格
+        function renderResultsTable(results) {
+            const header = document.getElementById('resultsTableHeader');
+            const body = document.getElementById('resultsTableBody');
+
+            // 清空表格
+            header.innerHTML = '';
+            body.innerHTML = '';
+
+            // 生成表头（参数名 + 机械模量 + 相似度）
+            const firstResult = results[0];
+            const paramNames = Object.keys(firstResult.params);
+
+            // 添加参数表头
+            paramNames.forEach(name => {
+                const th = document.createElement('th');
+                th.className = 'px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+                th.textContent = name;
+                header.appendChild(th);
+            });
+
+            // 添加机械模量表头
+            const modulusTh = document.createElement('th');
+            modulusTh.className = 'px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+            modulusTh.textContent = '机械模量(MPa)';
+            header.appendChild(modulusTh);
+
+            // 添加相似度表头
+            const diffTh = document.createElement('th');
+            diffTh.className = 'px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+            diffTh.textContent = '与目标差值(MPa)';
+            header.appendChild(diffTh);
+
+            // 生成表格内容
+            results.forEach((result, index) => {
+                const row = document.createElement('tr');
+                row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+
+                // 添加参数值
+                paramNames.forEach(name => {
+                    const td = document.createElement('td');
+                    td.className = 'px-4 py-3 whitespace-nowrap text-sm text-gray-900';
+                    td.textContent = result.params[name];
+                    row.appendChild(td);
+                });
+
+                // 添加机械模量值
+                const modulusTd = document.createElement('td');
+                modulusTd.className = 'px-4 py-3 whitespace-nowrap text-sm font-medium text-garf';
+                modulusTd.textContent = result.modulus;
+                row.appendChild(modulusTd);
+
+                // 添加差值（相似度）
+                const diffTd = document.createElement('td');
+                diffTd.className = 'px-4 py-3 whitespace-nowrap text-sm';
+                diffTd.innerHTML = `<span class="px-2 py-0.5 rounded-full text-xs ${result.modulus_diff <= 0.5 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                    ${result.modulus_diff}
+                </span>`;
+                row.appendChild(diffTd);
+
+                body.appendChild(row);
+            });
+        }
+
+        // 工具函数：生成直方图数据
+        function getHistogramBins(data, binCount) {
+            if (data.length === 0) return { labels: [], counts: [] };
+
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const binWidth = (max - min) / binCount;
+            const bins = Array(binCount).fill(0);
+            const labels = Array(binCount).fill(0);
+
+            // 统计每个区间的数量
+            data.forEach(value => {
+                const binIndex = Math.min(Math.floor((value - min) / binWidth), binCount - 1);
+                bins[binIndex]++;
+            });
+
+            // 生成标签（区间中点）
+            for (let i = 0; i < binCount; i++) {
+                labels[i] = (min + binWidth * i + binWidth / 2).toFixed(1);
+            }
+
+            return { labels, counts: bins };
+        }
+
+        // 工具函数：显示错误状态
         function showError(message) {
             document.getElementById('errorMessage').textContent = message;
             showState('errorState');
         }
 
-        // 显示计算结果
-        function displayResults(data) {
-            // 更新结果摘要
-            document.getElementById('resultCount').textContent = data.total_points;
-            document.getElementById('sampledCount').textContent = data.sampled_points;
-
-            // 更新x值范围
-            document.getElementById('x1Min').textContent = data.ranges.x1.min;
-            document.getElementById('x1Max').textContent = data.ranges.x1.max;
-            document.getElementById('x2Min').textContent = data.ranges.x2.min;
-            document.getElementById('x2Max').textContent = data.ranges.x2.max;
-            document.getElementById('x3Min').textContent = data.ranges.x3.min;
-            document.getElementById('x3Max').textContent = data.ranges.x3.max;
-
-            // 更新示例组合表格
-            const examplesTable = document.getElementById('examplesTable');
-            examplesTable.innerHTML = '';
-
-            data.examples.forEach(example => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="px-4 py-3 whitespace-nowrap">${example.x1}</td>
-                    <td class="px-4 py-3 whitespace-nowrap">${example.x2}</td>
-                    <td class="px-4 py-3 whitespace-nowrap">${example.x3}</td>
-                    <td class="px-4 py-3 whitespace-nowrap font-medium text-gray-900">${example.y}</td>
-                `;
-                examplesTable.appendChild(row);
+        // 工具函数：切换显示状态
+        function showState(stateId) {
+            ['initialState', 'loadingState', 'errorState', 'resultState'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
             });
-
-            // 更新图表
-            updateChart(data);
-
-            // 显示结果状态
-            showState('resultState');
-        }
-        // 更新x值分布图表
-        function updateChart(data) {
-            const ctx = document.getElementById('xValuesChart').getContext('2d');
-
-            // 确保canvas上下文被正确清理
-            if (xValuesChart) {
-                xValuesChart.destroy();
-                // 额外添加清理步骤
-                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-            }
-
-            // 检查Chart.js是否支持boxplot类型，如果不支持则使用散点图替代
-            if (!Chart.controllers.boxplot) {
-                // 使用散点图作为替代
-                xValuesChart = new Chart(ctx, {
-                    type: 'scatter',
-                    data: {
-                        datasets: [
-                            {
-                                label: 'x1值范围',
-                                data: [
-                                    {x: 1, y: data.ranges.x1.min},
-                                    {x: 1, y: data.ranges.x1.max}
-                                ],
-                                backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                                pointRadius: 6
-                            },
-                            {
-                                label: 'x2值范围',
-                                data: [
-                                    {x: 2, y: data.ranges.x2.min},
-                                    {x: 2, y: data.ranges.x2.max}
-                                ],
-                                backgroundColor: 'rgba(16, 185, 129, 0.7)',
-                                pointRadius: 6
-                            },
-                            {
-                                label: 'x3值范围',
-                                data: [
-                                    {x: 3, y: data.ranges.x3.min},
-                                    {x: 3, y: data.ranges.x3.max}
-                                ],
-                                backgroundColor: 'rgba(139, 92, 246, 0.7)',
-                                pointRadius: 6
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: '变量'
-                                },
-                                ticks: {
-                                    callback: function(value) {
-                                        const labels = ['', 'x1', 'x2', 'x3'];
-                                        return labels[value];
-                                    }
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: '值'
-                                }
-                            }
-                        }
-                    }
-                });
-            } else {
-                // 如果支持boxplot类型，则使用boxplot
-                xValuesChart = new Chart(ctx, {
-                    type: 'boxplot',
-                    data: {
-                        labels: ['x1', 'x2', 'x3'],
-                        datasets: [{
-                            label: 'x值分布',
-                            data: [
-                                [data.ranges.x1.min, data.ranges.x1.max],
-                                [data.ranges.x2.min, data.ranges.x2.max],
-                                [data.ranges.x3.min, data.ranges.x3.max]
-                            ],
-                            backgroundColor: [
-                                'rgba(59, 130, 246, 0.2)',
-                                'rgba(16, 185, 129, 0.2)',
-                                'rgba(139, 92, 246, 0.2)'
-                            ],
-                            borderColor: [
-                                'rgba(59, 130, 246, 1)',
-                                'rgba(16, 185, 129, 1)',
-                                'rgba(139, 92, 246, 1)'
-                            ],
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: false,
-                                title: {
-                                    display: true,
-                                    text: '值'
-                                }
-                            }
-                        },
-                        plugins: {
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        const index = context.dataIndex;
-                                        const values = context.raw;
-                                        return `${context.label}: ${values[0]} - ${values[1]}`;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
+            document.getElementById(stateId).classList.remove('hidden');
         }
     </script>
 </body>
-</html>
-
 </html>
