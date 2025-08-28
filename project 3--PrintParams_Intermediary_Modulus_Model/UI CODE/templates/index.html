@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D打印骨支架参数优化工具</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.4/dist/jquery.min.js"></script>
+    <style>
+        .model-group { margin-bottom: 1rem; }
+        .model-option { padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; }
+        .model-disabled { background-color: #f8f9fa; color: #6c757d; cursor: not-allowed; }
+        .model-enabled { background-color: #e3f2fd; cursor: pointer; }
+        .model-enabled:hover { background-color: #cfe2ff; }
+        .param-card { border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 1rem; }
+        .result-row-green { background-color: #d4edda !important; }
+        .result-row-yellow { background-color: #fff3cd !important; }
+        .img-container { text-align: center; margin: 2rem 0; }
+        .img-container img { max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .loading { display: none; text-align: center; padding: 2rem; }
+    </style>
+</head>
+<body class="container py-5">
+    <!-- 页面标题 -->
+    <header class="text-center mb-5">
+        <h1 class="text-primary">3D打印骨支架参数优化工具</h1>
+        <p class="text-muted">基于Flask与集成学习的低代码参数推荐系统</p>
+    </header>
+
+    <!-- 核心功能区 -->
+    <div class="row g-4">
+        <!-- 左侧：模型选择与参数输入 -->
+        <div class="col-md-4">
+            <!-- 1. 模型选择 -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">1. 模型选择</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-2">按类型选择模型（蓝色为可使用，灰色为不可用）</p>
+                    <div class="overflow-y-auto" style="max-height: 350px;">
+                        {% for model_type, models in models_meta.items() %}
+                            <div class="model-group">
+                                <h6 class="fw-bold">{{ model_type }}</h6>
+                                {% for model in models %}
+                                    <div class="model-option {% if model.loaded %}model-enabled{% else %}model-disabled{% endif %}"
+                                         data-model-key="{{ model.key }}"
+                                         {% if not model.loaded %}title="{{ model.error }}"{% endif %}>
+                                        <div class="fw-semibold">{{ model.name }}</div>
+                                        <div class="text-sm text-muted">{{ model.desc[:30] }}...</div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endfor %}
+                        <input type="hidden" id="selected-model-key" value="">
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- 2. 目标性能输入 -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">2. 目标性能输入</h5>
+                </div>
+                <div class="card-body">
+                    <!-- 弹性模量范围 -->
+                    <div class="mb-3">
+                        <label class="form-label">目标弹性模量范围（{{ target_e_cfg.desc }}）</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <input type="number" id="target-e-min" class="form-control"
+                                       min="{{ target_e_cfg.min }}" max="{{ target_e_cfg.max }}"
+                                       step="{{ target_e_cfg.step }}" value="275.00"
+                                       placeholder="最小值">
+                                <div class="text-xs text-muted mt-1">精度：{{ target_e_cfg.precision }}</div>
+                            </div>
+                            <div class="col-6">
+                                <input type="number" id="target-e-max" class="form-control"
+                                       min="{{ target_e_cfg.min }}" max="{{ target_e_cfg.max }}"
+                                       step="{{ target_e_cfg.step }}" value="325.00"
+                                       placeholder="最大值">
+                                <div class="text-xs text-muted mt-1">精度：{{ target_e_cfg.precision }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 误差容忍度 -->
+                    <div class="mb-3">
+                        <label class="form-label">误差容忍度（{{ tolerance_cfg.desc }}）</label>
+                        <input type="number" id="tolerance" class="form-control"
+                               min="{{ tolerance_cfg.min }}" max="{{ tolerance_cfg.max }}"
+                               step="{{ tolerance_cfg.step }}" value="{{ tolerance_cfg.default }}">
+                        <div class="text-xs text-muted mt-1">精度：{{ tolerance_cfg.precision }}，默认：{{ tolerance_cfg.default }}</div>
+                    </div>
+                    <!-- 查询按钮 -->
+                    <button id="query-btn" class="btn btn-primary w-100" disabled>
+                        🔍 生成Top-10推荐参数
+                    </button>
+                </div>
+            </div>
+
+            <!-- 3. 模型性能回溯 -->
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">3. 模型性能回溯</h5>
+                </div>
+                <div class="card-body" id="model-perf-container">
+                    <p class="text-muted">请选择模型以查看性能指标</p>
+                    <div id="model-perf-content" style="display: none;">
+                        <div class="mb-2"><strong>模型名称：</strong><span id="perf-name">-</span></div>
+                        <div class="mb-2"><strong>精度指标：</strong><span id="perf-acc">-</span></div>
+                        <div class="mb-2"><strong>计算速度：</strong><span id="perf-speed">-</span></div>
+                        <div class="mb-2"><strong>适用场景：</strong><span id="perf-desc">-</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：结果展示与可视化 -->
+        <div class="col-md-8">
+            <!-- 加载中提示 -->
+            <div class="loading" id="loading">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2">正在筛选最优参数组合...（预计<1秒）</p>
+            </div>
+
+            <!-- 结果容器（初始隐藏） -->
+            <div id="result-container" style="display: none;">
+                <!-- 1. 结果统计信息 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">参数筛选结果统计</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <div class="card param-card bg-info text-white">
+                                    <div class="card-body">
+                                        <h6 class="card-title">目标范围</h6>
+                                        <p id="stat-target">-</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card param-card bg-info text-white">
+                                    <div class="card-body">
+                                        <h6 class="card-title">符合条件样本</h6>
+                                        <p id="stat-total">-</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card param-card bg-info text-white">
+                                    <div class="card-body">
+                                        <h6 class="card-title">推荐组数</h6>
+                                        <p>10组（Top-10）</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card param-card bg-info text-white">
+                                    <div class="card-body">
+                                        <h6 class="card-title">误差标准</h6>
+                                        <p id="stat-tolerance">-</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Top-10参数表格 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Top-10推荐打印参数组合</h5>
+                        <div class="text-muted text-sm mt-1">
+                            绿色：与目标差值≤0.5MPa，黄色：差值>0.5MPa
+                        </div>
+                    </div>
+                    <div class="card-body overflow-x-auto">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr id="result-table-header">
+                                    <th>排名</th>
+                                    <!-- 动态添加特征列 -->
+                                </tr>
+                            </thead>
+                            <tbody id="result-table-body">
+                                <!-- 动态添加结果行 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 3. 参数范围统计卡片 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">推荐参数范围统计</h5>
+                    </div>
+                    <div class="card-body" id="param-stats-container">
+                        <!-- 动态添加参数统计卡片 -->
+                    </div>
+                </div>
+
+                <!-- 4. 可视化图表 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">可视化分析</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- 弹性模量分布 -->
+                        <div class="img-container mb-4">
+                            <h6>弹性模量分布对比图</h6>
+                            <div id="e-dist-placeholder" class="text-muted">
+                                展示全量预测分布与符合条件分布的对比
+                            </div>
+                            <img id="e-dist-img" src="" alt="弹性模量分布" style="display: none;">
+                        </div>
+                        <!-- 特征重要性 -->
+                        <div class="img-container">
+                            <h6>特征重要性分析图（仅RF/GA-RF模型）</h6>
+                            <div id="fi-placeholder" class="text-muted">
+                                展示各参数对弹性模量的影响权重（进给率、宽度、高度为主要因素）
+                            </div>
+                            <img id="fi-img" src="" alt="特征重要性" style="display: none;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 无结果提示（初始隐藏） -->
+            <div id="no-result" class="text-center py-5" style="display: none;">
+                <div class="alert alert-warning" role="alert">
+                    未找到符合条件的参数组合，请尝试调整目标范围或增大误差容忍度！
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="text-center text-muted mt-5">
+        <p>© 2024 3D打印骨支架参数优化工具 | 基于Flask与集成学习框架</p>
+    </footer>
+
+    <!-- 脚本 -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 1. 模型选择逻辑
+        $(document).on('click', '.model-enabled', function() {
+            // 移除其他模型的选中状态
+            $('.model-enabled').removeClass('bg-primary text-white');
+            // 添加当前模型的选中状态
+            $(this).addClass('bg-primary text-white');
+            // 记录选中的模型key
+            const modelKey = $(this).data('model-key');
+            $('#selected-model-key').val(modelKey);
+            // 启用查询按钮
+            $('#query-btn').prop('disabled', false);
+
+            // 加载模型性能回溯信息
+            const modelsMeta = JSON.parse('{{ models_meta|tojson|safe }}');
+            let modelMeta = null;
+            for (const type in modelsMeta) {
+                const models = modelsMeta[type];
+                for (const m of models) {
+                    if (m.key === modelKey) {
+                        modelMeta = m;
+                        break;
+                    }
+                }
+                if (modelMeta) break;
+            }
+            if (modelMeta) {
+                $('#model-perf-content').show();
+                $('#perf-name').text(modelMeta.name);
+                $('#perf-acc').text(modelMeta.acc);
+                $('#perf-speed').text(modelMeta.speed);
+                $('#perf-desc').text(modelMeta.desc);
+            }
+        });
+
+        // 2. 查询参数逻辑
+        $('#query-btn').click(function() {
+            const modelKey = $('#selected-model-key').val();
+            const targetEmin = parseFloat($('#target-e-min').val());
+            const targetEmax = parseFloat($('#target-e-max').val());
+            const tolerance = parseFloat($('#tolerance').val());
+
+            // 显示加载中，隐藏其他结果
+            $('#loading').show();
+            $('#result-container').hide();
+            $('#no-result').hide();
+
+            // 发送API请求
+            $.ajax({
+                url: '/api/filter-params',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    model_key: modelKey,
+                    target_E_min: targetEmin,
+                    target_E_max: targetEmax,
+                    tolerance: tolerance
+                }),
+                success: function(res) {
+                    $('#loading').hide();
+                    if (res.success) {
+                        // 显示结果容器
+                        $('#result-container').show();
+                        // 填充统计信息
+                        $('#stat-target').text(`${res.target_range.min.toFixed(2)}-${res.target_range.max.toFixed(2)}MPa（平均：${res.target_range.avg.toFixed(2)}MPa）`);
+                        $('#stat-total').text(`${res.total_filtered}组`);
+                        $('#stat-tolerance').text(`${tolerance.toFixed(1)}MPa`);
+
+                        // 填充Top-10表格
+                        const modelsMeta = JSON.parse('{{ models_meta|tojson|safe }}');
+                        let modelMeta = null;
+                        for (const type in modelsMeta) {
+                            const models = modelsMeta[type];
+                            for (const m of models) {
+                                if (m.key === modelKey) {
+                                    modelMeta = m;
+                                    break;
+                                }
+                            }
+                            if (modelMeta) break;
+                        }
+                        // 动态生成表头
+                        const headerRow = $('#result-table-header');
+                        headerRow.empty();
+                        headerRow.append('<th>排名</th>');
+                        const features = modelMeta.features;
+                        features.forEach(feat => {
+                            const featDesc = modelMeta.feature_ranges[feat].desc;
+                            headerRow.append(`<th>${featDesc}</th>`);
+                        });
+                        headerRow.append('<th>预测弹性模量（MPa）</th>');
+                        headerRow.append('<th>与目标差值（MPa）</th>');
+                        // 动态生成表体
+                        const body = $('#result-table-body');
+                        body.empty();
+                        res.top10.forEach(item => {
+                            const row = $(`<tr class="${item.E_diff <= 0.5 ? 'result-row-green' : 'result-row-yellow'}"></tr>`);
+                            row.append(`<td>${item.rank}</td>`);
+                            features.forEach(feat => {
+                                row.append(`<td>${item[feat]}</td>`);
+                            });
+                            row.append(`<td>${item.pred_E.toFixed(2)}</td>`);
+                            row.append(`<td>${item.E_diff.toFixed(2)}</td>`);
+                            body.append(row);
+                        });
+
+                        // 填充参数统计卡片
+                        const statsContainer = $('#param-stats-container');
+                        statsContainer.empty();
+                        const paramStats = res.param_stats;
+                        features.forEach(feat => {
+                            const stat = paramStats[feat];
+                            const card = $(`
+                                <div class="col-md-4">
+                                    <div class="card param-card">
+                                        <div class="card-body">
+                                            <h6 class="card-title">${stat.desc}</h6>
+                                            <p>最小值：${stat.min}</p>
+                                            <p>最大值：${stat.max}</p>
+                                            <p>平均值：${stat.avg}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            `);
+                            statsContainer.append(card);
+                        });
+
+                        // 填充可视化图表
+                        if (res.e_dist_img) {
+                            $('#e-dist-placeholder').hide();
+                            $('#e-dist-img').attr('src', `data:image/png;base64,${res.e_dist_img}`).show();
+                        } else {
+                            $('#e-dist-img').hide();
+                            $('#e-dist-placeholder').show();
+                        }
+                        if (res.fi_img) {
+                            $('#fi-placeholder').hide();
+                            $('#fi-img').attr('src', `data:image/png;base64,${res.fi_img}`).show();
+                        } else {
+                            $('#fi-img').hide();
+                            $('#fi-placeholder').show();
+                        }
+
+                        // 填充模型性能信息
+                        $('#perf-name').text(res.model_perf.name);
+                        $('#perf-acc').text(res.model_perf.acc);
+                        $('#perf-speed').text(res.model_perf.speed);
+                        $('#perf-desc').text(res.model_perf.desc);
+                    } else {
+                        // 显示无结果
+                        $('#no-result').show();
+                    }
+                },
+                error: function(xhr) {
+                    $('#loading').hide();
+                    const res = xhr.responseJSON || { msg: '服务器请求失败' };
+                    alert(`查询失败：${res.msg}`);
+                }
+            });
+        });
+
+        // 3. 输入合法性校验
+        $('#target-e-min, #target-e-max, #tolerance').on('input', function() {
+            const targetEmin = parseFloat($('#target-e-min').val()) || 0;
+            const targetEmax = parseFloat($('#target-e-max').val()) || 0;
+            const tolerance = parseFloat($('#tolerance').val()) || 0;
+            const modelKey = $('#selected-model-key').val();
+
+            // 校验弹性模量范围
+            const targetECfg = JSON.parse('{{ target_e_cfg|tojson|safe }}');
+            let eValid = targetEmin >= targetECfg.min && targetEmax <= targetECfg.max && targetEmin < targetEmax;
+            // 校验误差容忍度
+            const toleranceCfg = JSON.parse('{{ tolerance_cfg|tojson|safe }}');
+            let tolValid = tolerance >= toleranceCfg.min && tolerance <= toleranceCfg.max;
+
+            // 更新按钮状态
+            $('#query-btn').prop('disabled', !eValid || !tolValid || !modelKey);
+        });
+    </script>
+</body>
+</html>
