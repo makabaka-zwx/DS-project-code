@@ -18,7 +18,7 @@ plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 
 # 模型路径配置（对应9种模型：GA-RF/回归/RF各3种）
-MODEL_DIR = "../models"
+MODEL_DIR = "../models/"
 # 定义9种模型元数据（含特征范围、精度、描述）
 MODELS_META = {
     "GA-RF模型": [
