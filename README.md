@@ -1,3 +1,6 @@
+**Author**: Zhang Wenxiang
+**Student ID**: 2520157
+
 - **Project 1 (Initial Version)**  
   Aims to combine machine learning and finite element analysis for modulus prediction, with a focus on data exploration based on Random Forest (RF) models and model derivation.
 
