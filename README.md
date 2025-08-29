@@ -19,3 +19,7 @@
 
 - **Project 4 (English Version of Project 3.0)**  
   All codes have been translated into English to facilitate internationalization and open-source sharing.
+
+
+- **The Funcation of UI Page**
+  The user interaction interface has been saved and is provided for viewing only.
