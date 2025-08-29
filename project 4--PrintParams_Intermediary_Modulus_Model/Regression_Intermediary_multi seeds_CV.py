@@ -9,6 +9,7 @@ import sys
 import time
 from datetime import timedelta
 import os
+import joblib  # 用于保存最佳模型参数
 
 # 种子设置与RF保持一致
 base_seed = 2520157
@@ -159,6 +160,7 @@ def run_regression_experiment(seed):
     models = {}  # 存储所有模型
     results = {}  # 存储所有评估结果（包含val和test）
     model_names = {}  # 存储模型名称
+    model_params = {}  # 存储模型参数
 
     # --------------------------
     # 1. 中介模型（嵌套）：[T、V、F、Ŵ（预测宽）、Ĥ（预测高）]
@@ -176,6 +178,10 @@ def run_regression_experiment(seed):
         key = f'mediator_linear_{mediator.lower()}'
         models[key] = model
         model_names[key] = f'Linear Regression (predict {mediator})'
+        model_params[key] = {
+            'coefficients': model.coef_,
+            'intercept': model.intercept_
+        }
 
     # 多项式回归预测宽高
     for degree in poly_degrees:
@@ -207,6 +213,12 @@ def run_regression_experiment(seed):
                 'poly': poly
             }
             model_names[key] = f'Polynomial Regression (degree={degree}, predict {mediator})'
+            model_params[key] = {
+                'alpha': best_alpha,
+                'coefficients': best_model.coef_,
+                'intercept': best_model.intercept_,
+                'poly_features': poly.get_feature_names_out(predictors)
+            }
 
     # 1.2 第二步：用【3个打印参数 + 2个预测的宽高】预测机械模量（第二层：5个输入变量）
     def create_mediation_model(degree=1):
@@ -258,7 +270,11 @@ def run_regression_experiment(seed):
         if degree == 1:
             final_model = LinearRegression()
             final_model.fit(train_mediation_features, train_data[target])
-            return final_model, None, val_mediation_features
+            return final_model, None, val_mediation_features, {
+                'coefficients': final_model.coef_,
+                'intercept': final_model.intercept_,
+                'features': train_mediation_features.columns.tolist()
+            }
         else:
             # 使用degree=1确保不会增加新的交互特征，保持5个输入特征
             poly_final = PolynomialFeatures(degree=1)
@@ -281,11 +297,16 @@ def run_regression_experiment(seed):
                     best_alpha = alpha
                     best_model = model
 
-            return best_model, poly_final, val_mediation_features
+            return best_model, poly_final, val_mediation_features, {
+                'alpha': best_alpha,
+                'coefficients': best_model.coef_,
+                'intercept': best_model.intercept_,
+                'features': train_mediation_features.columns.tolist()
+            }
 
     # 创建不同阶数的中介模型
     for degree in [1] + poly_degrees:
-        model, poly, val_mediation_features = create_mediation_model(degree)
+        model, poly, val_mediation_features, params = create_mediation_model(degree)
         key = f'mediation_model_degree{degree}'
         models[key] = {
             'model': model,
@@ -293,6 +314,7 @@ def run_regression_experiment(seed):
             'degree': degree,
             'val_features': val_mediation_features  # 保存验证集特征用于评估
         }
+        model_params[key] = params
         if degree == 1:
             model_names[key] = 'Mediation Model (Linear)'
         else:
@@ -311,6 +333,11 @@ def run_regression_experiment(seed):
     key = 'direct_linear'
     models[key] = model
     model_names[key] = 'Direct Linear Model'
+    model_params[key] = {
+        'coefficients': model.coef_,
+        'intercept': model.intercept_,
+        'features': predictors
+    }
 
     # 多项式直接模型
     for degree in poly_degrees:
@@ -341,6 +368,13 @@ def run_regression_experiment(seed):
             'val_features': X_val_poly  # 保存验证集特征
         }
         model_names[key] = f'Direct Polynomial Model (degree={degree})'
+        model_params[key] = {
+            'alpha': best_alpha,
+            'coefficients': best_model.coef_,
+            'intercept': best_model.intercept_,
+            'degree': degree,
+            'poly_features': poly.get_feature_names_out(predictors)
+        }
 
     # --------------------------
     # 3. 混合模型：[T、V、F、W_true（真实宽）、H_true（真实高）]
@@ -357,6 +391,11 @@ def run_regression_experiment(seed):
     key = 'hybrid_linear'
     models[key] = model
     model_names[key] = 'Hybrid Linear Model'
+    model_params[key] = {
+        'coefficients': model.coef_,
+        'intercept': model.intercept_,
+        'features': hybrid_features
+    }
 
     # 多项式混合模型
     for degree in poly_degrees:
@@ -387,6 +426,13 @@ def run_regression_experiment(seed):
             'val_features': X_val_poly  # 保存验证集特征
         }
         model_names[key] = f'Hybrid Polynomial Model (degree={degree})'
+        model_params[key] = {
+            'alpha': best_alpha,
+            'coefficients': best_model.coef_,
+            'intercept': best_model.intercept_,
+            'degree': degree,
+            'poly_features': poly.get_feature_names_out(hybrid_features)
+        }
 
     # --------------------------
     # 评估所有模型（同时计算验证集和测试集）
@@ -554,7 +600,7 @@ def run_regression_experiment(seed):
             }
         }
 
-    return results, model_names, val_data[target], test_data[target]
+    return results, model_names, model_params, val_data[target], test_data[target]
 
 
 def calculate_statistics(results_list):
@@ -665,6 +711,9 @@ def save_statistics_table(stats_results, model_names, output_file):
 if __name__ == "__main__":
     # 创建输出目录
     os.makedirs("outputs", exist_ok=True)
+    os.makedirs("model_parameters", exist_ok=True)  # 模型参数保存目录
+    # 创建每个模型最佳参数的保存目录
+    os.makedirs(os.path.join("model_parameters", "best_per_model"), exist_ok=True)
 
     # 开始计时
     start_time = time.time()
@@ -688,6 +737,7 @@ if __name__ == "__main__":
 
     # 运行多次实验
     results_list = []
+    all_model_params = []  # 存储所有种子的模型参数
     model_names = None
     y_true_val = None
     y_true_test = None
@@ -697,8 +747,9 @@ if __name__ == "__main__":
         print(f"运行实验 {i + 1}/{len(seeds)}，种子: {seed}")
         print(f"{'=' * 30}")
 
-        results, exp_model_names, exp_y_val, exp_y_test = run_regression_experiment(seed)
+        results, exp_model_names, exp_model_params, exp_y_val, exp_y_test = run_regression_experiment(seed)
         results_list.append(results)
+        all_model_params.append(exp_model_params)
 
         # 保存模型名称（所有实验相同）
         if model_names is None:
@@ -764,19 +815,41 @@ if __name__ == "__main__":
     print(f"中介效应比例: {mediation_stats['mediation_ratio']:.2%}")
 
     # 保存统计结果表格
-    table_file = os.path.join("outputs", "regression_statistics.csv")
-    save_statistics_table(stats_results, model_names, table_file)
+    stats_file = get_unique_filename(os.path.join("outputs", "regression_statistics.csv"))
+    save_statistics_table(stats_results, model_names, stats_file)
+
+
+    # 保存每种模型中性能最好的参数（基于测试集R²）
+    print("\n" + "=" * 50)
+    print("保存每种模型中性能最佳的参数...")
+
+    # 为每个模型类型创建子目录
+    for model_key in stats_results:
+        model_dir = os.path.join("model_parameters", "best_per_model", model_key)
+        os.makedirs(model_dir, exist_ok=True)
+
+        # 找出该模型在所有种子中表现最好的一次（基于测试集R²）
+        best_seed_idx = np.argmax([results[model_key]['test']['R2'] for results in results_list])
+        best_seed = seeds[best_seed_idx]
+        best_params = all_model_params[best_seed_idx][model_key]
+
+        # 保存最佳参数
+        param_file = os.path.join(model_dir, f"best_params_seed_{best_seed}.pkl")
+        joblib.dump(best_params, param_file)
+
+        # 输出信息
+        print(f"模型 {model_names[model_key]} 最佳参数 (种子 {best_seed}) 已保存到: {param_file}")
+        print(f"  对应的测试集R²: {results_list[best_seed_idx][model_key]['test']['R2']:.4f}")
 
     # 计算并输出总运行时间
     end_time = time.time()
-    elapsed_time = end_time - start_time
+    total_time = timedelta(seconds=end_time - start_time)
     print("\n" + "=" * 50)
-    print(f"分析完成!")
+    print(f"分析完成! 总运行时间: {total_time}")
     print(f"结束时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"总运行时间: {str(timedelta(seconds=elapsed_time))}")
-    print(f"详细日志已保存到: {log_file}")
-    print(f"统计结果表格已保存到: {table_file}")
+    print(f"所有结果已保存到 'outputs' 和 'model_parameters' 目录")
 
     # 恢复标准输出
+    sys.stdout.log.close()
     sys.stdout = sys.stdout.terminal
     print(f"\n程序执行完毕。详细结果请查看日志文件: {log_file}")
