@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D打印骨支架参数优化工具</title>
+    <title>3D Printed Bone Scaffold Parameter Optimization Tool</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.4/dist/jquery.min.js"></script>
     <style>
@@ -21,24 +21,24 @@
     </style>
 </head>
 <body class="container py-5">
-    <!-- 页面标题 -->
+    <!-- Page Title -->
     <header class="text-center mb-5">
-        <h1 class="text-primary">3D打印骨支架参数优化工具</h1>
-        <p class="text-muted">基于Flask与集成学习的低代码参数推荐系统</p>
+        <h1 class="text-primary">3D Printed Bone Scaffold Parameter Optimization Tool</h1>
+        <p class="text-muted">Low-Code Parameter Recommendation System Based on Flask and Ensemble Learning</p>
     </header>
 
-    <!-- 核心功能区 -->
+    <!-- Core Function Area -->
     <div class="row g-4">
-        <!-- 左侧：模型选择与参数输入 -->
+        <!-- Left Side: Model Selection and Parameter Input -->
         <div class="col-md-4">
-            <!-- 1. 模型选择 -->
+            <!-- 1. Model Selection -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">1. 模型选择</h5>
+                    <h5 class="mb-0">1. Model Selection</h5>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted mb-2">按类型选择模型（蓝色为可使用，灰色为不可用）</p>
-                    <div class="overflow-y-auto" style="max-height: 350px;">
+                    <p class="text-muted mb-2">Select model by type (blue for available, gray for unavailable)</p>
+                    <div class="overflow-y-auto" style="max-height: 280px;">
                         {% for model_type, models in models_meta.items() %}
                             <div class="model-group">
                                 <h6 class="fw-bold">{{ model_type }}</h6>
@@ -58,85 +58,85 @@
                 </div>
             </div>
 
-            <!-- 2. 目标性能输入 -->
+            <!-- 2. Target Performance Input -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">2. 目标性能输入</h5>
+                    <h5 class="mb-0">2. Target Performance Input</h5>
                 </div>
                 <div class="card-body">
-                    <!-- 弹性模量范围 -->
+                    <!-- Elastic Modulus Range -->
                     <div class="mb-3">
-                        <label class="form-label">目标弹性模量范围（{{ target_e_cfg.desc }}）</label>
+                        <label class="form-label">Target Elastic Modulus Range ({{ target_e_cfg.desc }})</label>
                         <div class="row g-2">
                             <div class="col-6">
                                 <input type="number" id="target-e-min" class="form-control"
                                        min="{{ target_e_cfg.min }}" max="{{ target_e_cfg.max }}"
                                        step="{{ target_e_cfg.step }}" value="275.00"
-                                       placeholder="最小值">
-                                <div class="text-xs text-muted mt-1">精度：{{ target_e_cfg.precision }}</div>
+                                       placeholder="Minimum Value">
+                                <div class="text-xs text-muted mt-1">Precision: {{ target_e_cfg.precision }}</div>
                             </div>
                             <div class="col-6">
                                 <input type="number" id="target-e-max" class="form-control"
                                        min="{{ target_e_cfg.min }}" max="{{ target_e_cfg.max }}"
                                        step="{{ target_e_cfg.step }}" value="325.00"
-                                       placeholder="最大值">
-                                <div class="text-xs text-muted mt-1">精度：{{ target_e_cfg.precision }}</div>
+                                       placeholder="Maximum Value">
+                                <div class="text-xs text-muted mt-1">Precision: {{ target_e_cfg.precision }}</div>
                             </div>
                         </div>
                     </div>
-                    <!-- 误差容忍度 -->
+                    <!-- Tolerance -->
                     <div class="mb-3">
-                        <label class="form-label">误差容忍度（{{ tolerance_cfg.desc }}）</label>
+                        <label class="form-label">Error Tolerance ({{ tolerance_cfg.desc }})</label>
                         <input type="number" id="tolerance" class="form-control"
                                min="{{ tolerance_cfg.min }}" max="{{ tolerance_cfg.max }}"
                                step="{{ tolerance_cfg.step }}" value="{{ tolerance_cfg.default }}">
-                        <div class="text-xs text-muted mt-1">精度：{{ tolerance_cfg.precision }}，默认：{{ tolerance_cfg.default }}</div>
+                        <div class="text-xs text-muted mt-1">Precision: {{ tolerance_cfg.precision }}, Default: {{ tolerance_cfg.default }}</div>
                     </div>
-                    <!-- 查询按钮 -->
+                    <!-- Query Button -->
                     <button id="query-btn" class="btn btn-primary w-100" disabled>
-                        🔍 生成Top-10推荐参数
+                        🔍 Generate Top-10 Recommended Parameters
                     </button>
                 </div>
             </div>
 
-            <!-- 3. 模型性能回溯 -->
+            <!-- 3. Model Performance Review -->
             <div class="card">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">3. 模型性能回溯</h5>
+                    <h5 class="mb-0">3. Model Performance Review</h5>
                 </div>
                 <div class="card-body" id="model-perf-container">
-                    <p class="text-muted">请选择模型以查看性能指标</p>
+                    <p class="text-muted">Please select a model to view performance metrics</p>
                     <div id="model-perf-content" style="display: none;">
-                        <div class="mb-2"><strong>模型名称：</strong><span id="perf-name">-</span></div>
-                        <div class="mb-2"><strong>精度指标：</strong><span id="perf-acc">-</span></div>
-                        <div class="mb-2"><strong>计算速度：</strong><span id="perf-speed">-</span></div>
-                        <div class="mb-2"><strong>适用场景：</strong><span id="perf-desc">-</span></div>
+                        <div class="mb-2"><strong>Model Name:</strong><span id="perf-name">-</span></div>
+                        <div class="mb-2"><strong>Accuracy Metric:</strong><span id="perf-acc">-</span></div>
+                        <div class="mb-2"><strong>Computation Speed:</strong><span id="perf-speed">-</span></div>
+                        <div class="mb-2"><strong>Applicable Scenarios:</strong><span id="perf-desc">-</span></div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 右侧：结果展示与可视化 -->
+        <!-- Right Side: Result Display and Visualization -->
         <div class="col-md-8">
-            <!-- 加载中提示 -->
+            <!-- Loading Prompt -->
             <div class="loading" id="loading">
                 <div class="spinner-border text-primary" role="status"></div>
-                <p class="mt-2">正在筛选最优参数组合...（预计<1秒）</p>
+                <p class="mt-2">Filtering optimal parameter combinations... (Estimated <1 second)</p>
             </div>
 
-            <!-- 结果容器（初始隐藏） -->
+            <!-- Result Container (Initially Hidden) -->
             <div id="result-container" style="display: none;">
-                <!-- 1. 结果统计信息 -->
+                <!-- 1. Result Statistics -->
                 <div class="card mb-4">
                     <div class="card-header">
-                        <h5 class="mb-0">参数筛选结果统计</h5>
+                        <h5 class="mb-0">Parameter Filtering Result Statistics</h5>
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-md-3">
                                 <div class="card param-card bg-info text-white">
                                     <div class="card-body">
-                                        <h6 class="card-title">目标范围</h6>
+                                        <h6 class="card-title">Target Range</h6>
                                         <p id="stat-target">-</p>
                                     </div>
                                 </div>
@@ -144,7 +144,7 @@
                             <div class="col-md-3">
                                 <div class="card param-card bg-info text-white">
                                     <div class="card-body">
-                                        <h6 class="card-title">符合条件样本</h6>
+                                        <h6 class="card-title">Qualified Samples</h6>
                                         <p id="stat-total">-</p>
                                     </div>
                                 </div>
@@ -152,15 +152,15 @@
                             <div class="col-md-3">
                                 <div class="card param-card bg-info text-white">
                                     <div class="card-body">
-                                        <h6 class="card-title">推荐组数</h6>
-                                        <p>10组（Top-10）</p>
+                                        <h6 class="card-title">Recommended Groups</h6>
+                                        <p>10 groups (Top-10)</p>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="card param-card bg-info text-white">
                                     <div class="card-body">
-                                        <h6 class="card-title">误差标准</h6>
+                                        <h6 class="card-title">Error Criterion</h6>
                                         <p id="stat-tolerance">-</p>
                                     </div>
                                 </div>
@@ -169,97 +169,97 @@
                     </div>
                 </div>
 
-                <!-- 2. Top-10参数表格 -->
+                <!-- 2. Top-10 Parameter Table -->
                 <div class="card mb-4">
                     <div class="card-header">
-                        <h5 class="mb-0">Top-10推荐打印参数组合</h5>
+                        <h5 class="mb-0">Top-10 Recommended Printing Parameter Combinations</h5>
                         <div class="text-muted text-sm mt-1">
-                            绿色：与目标差值≤0.5MPa，黄色：差值>0.5MPa
+                            Green: Difference from target ≤0.5MPa, Yellow: Difference >0.5MPa
                         </div>
                     </div>
                     <div class="card-body overflow-x-auto">
                         <table class="table table-hover">
                             <thead class="table-light">
                                 <tr id="result-table-header">
-                                    <th>排名</th>
-                                    <!-- 动态添加特征列 -->
+                                    <th>Rank</th>
+                                    <!-- Dynamically Add Feature Columns -->
                                 </tr>
                             </thead>
                             <tbody id="result-table-body">
-                                <!-- 动态添加结果行 -->
+                                <!-- Dynamically Add Result Rows -->
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- 3. 参数范围统计卡片 -->
+                <!-- 3. Parameter Range Statistics Card -->
                 <div class="card mb-4">
                     <div class="card-header">
-                        <h5 class="mb-0">推荐参数范围统计</h5>
+                        <h5 class="mb-0">Recommended Parameter Range Statistics</h5>
                     </div>
                         <div class="overflow-x-auto" style="max-width: 100%;">
                             <div class="d-flex flex-nowrap" id="param-stats-container">
-                                <!-- 动态添加参数统计卡片，这里的 d-flex flex-nowrap 让子元素横向排列且不换行 -->
+                                <!-- Dynamically Add Parameter Statistics Cards, d-flex flex-nowrap makes children arrange horizontally without wrapping -->
                             </div>
                         </div>
                 </div>
 
-                <!-- 4. 可视化图表 -->
+                <!-- 4. Visualization Charts -->
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">可视化分析</h5>
+                        <h5 class="mb-0">Visualization Analysis</h5>
                     </div>
                     <div class="card-body">
-                        <!-- 弹性模量分布 -->
+                        <!-- Elastic Modulus Distribution -->
                         <div class="img-container mb-4">
-                            <h6>弹性模量分布对比图</h6>
+                            <h6>Elastic Modulus Distribution Comparison</h6>
                             <div id="e-dist-placeholder" class="text-muted">
-                                展示全量预测分布与符合条件分布的对比
+                                Shows comparison between full prediction distribution and qualified distribution
                             </div>
-                            <img id="e-dist-img" src="" alt="弹性模量分布" style="display: none;">
+                            <img id="e-dist-img" src="" alt="Elastic Modulus Distribution" style="display: none;">
                         </div>
-                        <!-- 特征重要性 -->
+                        <!-- Feature Importance -->
                         <div class="img-container">
-                            <h6>特征重要性分析图（仅RF/GA-RF模型）</h6>
+                            <h6>Feature Importance Analysis (RF/GA-RF Models Only)</h6>
                             <div id="fi-placeholder" class="text-muted">
-                                展示各参数对弹性模量的影响权重（进给率、宽度、高度为主要因素）
+                                Shows the influence weight of each parameter on elastic modulus (feed rate, width, height are main factors)
                             </div>
-                            <img id="fi-img" src="" alt="特征重要性" style="display: none;">
+                            <img id="fi-img" src="" alt="Feature Importance" style="display: none;">
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 无结果提示（初始隐藏） -->
+            <!-- No Result Prompt (Initially Hidden) -->
             <div id="no-result" class="text-center py-5" style="display: none;">
                 <div class="alert alert-warning" role="alert">
-                    未找到符合条件的参数组合，请尝试调整目标范围或增大误差容忍度！
+                    No qualified parameter combinations found. Please try adjusting the target range or increasing the error tolerance!
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 页脚 -->
+    <!-- Footer -->
     <footer class="text-center text-muted mt-5">
-        <p>© 2024 3D打印骨支架参数优化工具 | 基于Flask与集成学习框架</p>
+        <p>© 2024 3D Printed Bone Scaffold Parameter Optimization Tool | Based on Flask and Ensemble Learning Framework</p>
     </footer>
 
-    <!-- 脚本 -->
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // 1. 模型选择逻辑
+        // 1. Model Selection Logic
         $(document).on('click', '.model-enabled', function() {
-            // 移除其他模型的选中状态
+            // Remove selection status from other models
             $('.model-enabled').removeClass('bg-primary text-white');
-            // 添加当前模型的选中状态
+            // Add selection status to current model
             $(this).addClass('bg-primary text-white');
-            // 记录选中的模型key
+            // Record selected model key
             const modelKey = $(this).data('model-key');
             $('#selected-model-key').val(modelKey);
-            // 启用查询按钮
+            // Enable query button
             $('#query-btn').prop('disabled', false);
 
-            // 加载模型性能回溯信息
+            // Load model performance review information
             const modelsMeta = JSON.parse('{{ models_meta|tojson|safe }}');
             let modelMeta = null;
             for (const type in modelsMeta) {
@@ -281,19 +281,19 @@
             }
         });
 
-        // 2. 查询参数逻辑
+        // 2. Parameter Query Logic
         $('#query-btn').click(function() {
             const modelKey = $('#selected-model-key').val();
             const targetEmin = parseFloat($('#target-e-min').val());
             const targetEmax = parseFloat($('#target-e-max').val());
             const tolerance = parseFloat($('#tolerance').val());
 
-            // 显示加载中，隐藏其他结果
+            // Show loading, hide other results
             $('#loading').show();
             $('#result-container').hide();
             $('#no-result').hide();
 
-            // 发送API请求
+            // Send API request
             $.ajax({
                 url: '/api/filter-params',
                 method: 'POST',
@@ -305,19 +305,19 @@
                     tolerance: tolerance
                 }),
                 success: function(res) {
-                    console.log("完整返回数据：", res);
-                    console.log("是否成功：", res.success);
-                    console.log("Top10数据长度：", res.top10?.length);
+                    console.log("Complete returned data:", res);
+                    console.log("Success status:", res.success);
+                    console.log("Top10 data length:", res.top10?.length);
                     $('#loading').hide();
                     if (res.success) {
-                        // 显示结果容器
+                        // Show result container
                         $('#result-container').show();
-                        // 填充统计信息
-                        $('#stat-target').text(`${res.target_range.min.toFixed(2)}-${res.target_range.max.toFixed(2)}MPa（平均：${res.target_range.avg.toFixed(2)}MPa）`);
-                        $('#stat-total').text(`${res.total_filtered}组`);
+                        // Fill statistical information
+                        $('#stat-target').text(`${res.target_range.min.toFixed(2)}-${res.target_range.max.toFixed(2)}MPa (Average: ${res.target_range.avg.toFixed(2)}MPa)`);
+                        $('#stat-total').text(`${res.total_filtered} groups`);
                         $('#stat-tolerance').text(`${tolerance.toFixed(1)}MPa`);
 
-                        // 填充Top-10表格
+                        // Fill Top-10 table
                         const modelsMeta = JSON.parse('{{ models_meta|tojson|safe }}');
                         let modelMeta = null;
                         for (const type in modelsMeta) {
@@ -330,18 +330,18 @@
                             }
                             if (modelMeta) break;
                         }
-                        // 动态生成表头
+                        // Dynamically generate table header
                         const headerRow = $('#result-table-header');
                         headerRow.empty();
-                        headerRow.append('<th>排名</th>');
+                        headerRow.append('<th>Rank</th>');
                         const features = modelMeta.features;
                         features.forEach(feat => {
                             const featDesc = modelMeta.feature_ranges[feat].desc;
                             headerRow.append(`<th>${featDesc}</th>`);
                         });
-                        headerRow.append('<th>预测弹性模量（MPa）</th>');
-                        headerRow.append('<th>与目标差值（MPa）</th>');
-                        // 动态生成表体
+                        headerRow.append('<th>Predicted Elastic Modulus (MPa)</th>');
+                        headerRow.append('<th>Difference from Target (MPa)</th>');
+                        // Dynamically generate table body
                         const body = $('#result-table-body');
                         body.empty();
                         res.top10.forEach(item => {
@@ -355,7 +355,7 @@
                             body.append(row);
                         });
 
-                        // 填充参数统计卡片
+                        // Fill parameter statistics cards
                         const statsContainer = $('#param-stats-container');
                         statsContainer.empty();
                         const paramStats = res.param_stats;
@@ -366,9 +366,9 @@
                                     <div class="card param-card">
                                         <div class="card-body">
                                             <h6 class="card-title">${stat.desc}</h6>
-                                            <p>最小值：${stat.min}</p>
-                                            <p>最大值：${stat.max}</p>
-                                            <p>平均值：${stat.avg}</p>
+                                            <p>Minimum: ${stat.min}</p>
+                                            <p>Maximum: ${stat.max}</p>
+                                            <p>Average: ${stat.avg}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -376,7 +376,7 @@
                             statsContainer.append(card);
                         });
 
-                        // 填充可视化图表
+                        // Fill visualization charts
                         if (res.e_dist_img) {
                             $('#e-dist-placeholder').hide();
                             $('#e-dist-img').attr('src', `data:image/png;base64,${res.e_dist_img}`).show();
@@ -392,39 +392,39 @@
                             $('#fi-placeholder').show();
                         }
 
-                        // 填充模型性能信息
+                        // Fill model performance information
                         $('#perf-name').text(res.model_perf.name);
                         $('#perf-acc').text(res.model_perf.acc);
                         $('#perf-speed').text(res.model_perf.speed);
                         $('#perf-desc').text(res.model_perf.desc);
                     } else {
-                        // 显示无结果
+                        // Show no result
                         $('#no-result').show();
                     }
                 },
                 error: function(xhr) {
                     $('#loading').hide();
-                    const res = xhr.responseJSON || { msg: '服务器请求失败' };
-                    alert(`查询失败：${res.msg}`);
+                    const res = xhr.responseJSON || { msg: 'Server request failed' };
+                    alert(`Query failed: ${res.msg}`);
                 }
             });
         });
 
-        // 3. 输入合法性校验
+        // 3. Input Validity Check
         $('#target-e-min, #target-e-max, #tolerance').on('input', function() {
             const targetEmin = parseFloat($('#target-e-min').val()) || 0;
             const targetEmax = parseFloat($('#target-e-max').val()) || 0;
             const tolerance = parseFloat($('#tolerance').val()) || 0;
             const modelKey = $('#selected-model-key').val();
 
-            // 校验弹性模量范围
+            // Check elastic modulus range
             const targetECfg = JSON.parse('{{ target_e_cfg|tojson|safe }}');
             let eValid = targetEmin >= targetECfg.min && targetEmax <= targetECfg.max && targetEmin < targetEmax;
-            // 校验误差容忍度
+            // Check error tolerance
             const toleranceCfg = JSON.parse('{{ tolerance_cfg|tojson|safe }}');
             let tolValid = tolerance >= toleranceCfg.min && tolerance <= toleranceCfg.max;
 
-            // 更新按钮状态
+            // Update button status
             $('#query-btn').prop('disabled', !eValid || !tolValid || !modelKey);
         });
     </script>
