@@ -9,15 +9,15 @@ import sys
 import time
 from datetime import timedelta
 import os
-import joblib  # 用于保存最佳模型参数
+import joblib  # For saving best model parameters
 
-# 种子设置与RF保持一致
+# Seed settings consistent with RF
 base_seed = 2520157
-seeds = [base_seed - 4 + i for i in range(9)]  # 共9个种子
+seeds = [base_seed - 4 + i for i in range(9)]  # Total of 9 seeds
 
 
 class Logger:
-    """同时将输出流保存到控制台和文件"""
+    """Redirect output to both console and file"""
 
     def __init__(self, filename):
         self.terminal = sys.stdout
@@ -33,7 +33,7 @@ class Logger:
 
 
 def get_unique_filename(base_name):
-    """生成唯一的日志文件名，如果已存在则添加序号后缀"""
+    """Generate unique filename with counter suffix if exists"""
     if not os.path.exists(base_name):
         return base_name
 
@@ -50,130 +50,130 @@ def get_unique_filename(base_name):
 
 
 def run_regression_experiment(seed):
-    """运行单次回归实验并返回结果（包含验证集和测试集）"""
+    """Run single regression experiment and return results (including validation and test sets)"""
     np.random.seed(seed)
 
-    # 加载数据
+    # Load data
     data = pd.read_csv('./data_FEA_ANN_FEA-ANN.csv')
     selected_columns = ['printing_temperature', 'feed_rate', 'printing_speed', 'Height', 'Width',
                         'Experiment_mean(MPa)']
     data = data[selected_columns]
 
-    # 定义多项式阶数列表
+    # Define polynomial degrees
     poly_degrees = [2, 3]
 
-    # 定义变量 - 明确三种模型的输入参数组合
-    predictors = ['printing_temperature', 'feed_rate', 'printing_speed']  # T（温度）、V（速度）、F（进给率）
-    mediators = ['Height', 'Width']  # W（宽）、H（高）
-    target = 'Experiment_mean(MPa)'  # 最终目标变量（机械模量）
+    # Define variables - clear input parameter combinations for three model types
+    predictors = ['printing_temperature', 'feed_rate', 'printing_speed']  # T (temperature), V (speed), F (feed rate)
+    mediators = ['Height', 'Width']  # W (width), H (height)
+    target = 'Experiment_mean(MPa)'  # Final target variable (mechanical modulus)
 
-    # 数据集划分：基于机械模量的分层抽样
-    # 训练集(70%)、验证集(15%)、测试集(15%)
-    # 首先创建分层所需的 bins
+    # Dataset splitting: stratified sampling based on mechanical modulus
+    # Training set (70%), validation set (15%), test set (15%)
+    # First create bins for stratification
 
-    # 动态调整分箱数量，确保每个箱至少有4个样本（满足两次分层抽样要求）
-    min_samples_per_bin = 4  # 确保每个分箱至少有4个样本
+    # Dynamically adjust number of bins to ensure at least 4 samples per bin (for two stratifications)
+    min_samples_per_bin = 4  # Ensure at least 4 samples per bin
     max_bins = 10
 
-    # 计算最大可能的分箱数量
+    # Calculate maximum possible number of bins
     max_possible_bins = len(data) // min_samples_per_bin
     num_bins = min(max_bins, max_possible_bins)
 
-    # 确保至少有2个分箱
+    # Ensure at least 2 bins
     num_bins = max(2, num_bins)
 
-    # 创建分箱
+    # Create bins
     data['target_bin'] = pd.cut(data[target], bins=num_bins, labels=False)
 
-    # 检查每个分箱的样本数量，如果有分箱样本数不足，合并相邻分箱
+    # Check sample count per bin, merge adjacent bins if any has insufficient samples
     bin_counts = data['target_bin'].value_counts().sort_index()
     while (bin_counts < min_samples_per_bin).any():
-        # 找到样本最少的分箱
+        # Find bin with fewest samples
         min_bin = bin_counts.idxmin()
-        # 合并到相邻的分箱
+        # Merge with adjacent bin
         if min_bin == 0:
             data['target_bin'] = data['target_bin'].replace(1, 0)
         elif min_bin == len(bin_counts) - 1:
             data['target_bin'] = data['target_bin'].replace(min_bin, min_bin - 1)
         else:
-            # 合并到样本较多的相邻分箱
+            # Merge with neighbor with more samples
             left_count = bin_counts[min_bin - 1]
             right_count = bin_counts[min_bin + 1]
             if left_count >= right_count:
                 data['target_bin'] = data['target_bin'].replace(min_bin, min_bin - 1)
             else:
                 data['target_bin'] = data['target_bin'].replace(min_bin, min_bin + 1)
-        # 重新计算分箱数量
+        # Recalculate bin counts
         bin_counts = data['target_bin'].value_counts().sort_index()
-        # 重命名分箱标签，确保连续
+        # Rename bin labels to ensure continuity
         data['target_bin'] = pd.Categorical(data['target_bin']).codes
         bin_counts = data['target_bin'].value_counts().sort_index()
 
-        # 如果只剩下一个分箱，无法再合并，只能打破循环
+        # Break loop if only one bin remains
         if len(bin_counts) == 1:
             break
 
-    # 输出分箱信息，验证每个分箱至少有4个样本
-    print(f"分层抽样验证:")
-    print(f"- 分箱数量: {len(bin_counts)}")
+    # Output bin information to verify minimum 4 samples per bin
+    print(f"Stratified sampling verification:")
+    print(f"- Number of bins: {len(bin_counts)}")
     for bin_idx in bin_counts.index:
-        print(f"  分箱 {bin_idx}: {bin_counts[bin_idx]} 个样本")
+        print(f"  Bin {bin_idx}: {bin_counts[bin_idx]} samples")
     assert (bin_counts >= min_samples_per_bin).all() or len(bin_counts) == 1, \
-        "存在样本数少于4的分箱，请检查数据或调整分箱策略"
+        "Bins with fewer than 4 samples exist. Please check data or adjust binning strategy"
 
-    # 如果所有数据都在一个分箱中，使用随机抽样而非分层抽样
+    # Use random sampling instead of stratified if all data in one bin
     stratify_param = data['target_bin'] if len(bin_counts) > 1 else None
 
-    # 第一次分层抽样：划分训练集和临时集
+    # First stratified split: training set and temporary set
     train_data, temp_data = train_test_split(
         data,
         test_size=0.3,
         random_state=seed,
-        stratify=stratify_param  # 基于目标变量分层
+        stratify=stratify_param  # Stratify based on target variable
     )
 
-    # 为第二次抽样准备分层参数
+    # Prepare stratification parameter for second split
     if stratify_param is not None:
         stratify_param_temp = temp_data['target_bin']
-        # 检查临时集中每个分箱的样本数
+        # Check sample counts in temporary set bins
         temp_bin_counts = stratify_param_temp.value_counts()
-        # 如果有分箱样本数不足2，改用随机抽样
+        # Use random sampling if any bin has fewer than 2 samples
         if (temp_bin_counts < 2).any():
             stratify_param_temp = None
     else:
         stratify_param_temp = None
 
-    # 第二次分层抽样：从临时集中划分验证集和测试集
+    # Second stratified split: validation and test sets from temporary set
     val_data, test_data = train_test_split(
         temp_data,
         test_size=0.5,
         random_state=seed,
-        stratify=stratify_param_temp  # 基于目标变量分层
+        stratify=stratify_param_temp  # Stratify based on target variable
     )
 
-    # 删除辅助列
+    # Remove auxiliary column
     train_data = train_data.drop('target_bin', axis=1)
     val_data = val_data.drop('target_bin', axis=1)
     test_data = test_data.drop('target_bin', axis=1)
 
-    # 准备模型字典
-    models = {}  # 存储所有模型
-    results = {}  # 存储所有评估结果（包含val和test）
-    model_names = {}  # 存储模型名称
-    model_params = {}  # 存储模型参数
+    # Prepare model dictionaries
+    models = {}  # Store all models
+    results = {}  # Store all evaluation results (including val and test)
+    model_names = {}  # Store model names
+    model_params = {}  # Store model parameters
 
     # --------------------------
-    # 1. 中介模型（嵌套）：[T、V、F、Ŵ（预测宽）、Ĥ（预测高）]
-    #    几何特征来源：第一层模型预测
-    #    核心目标：高精度预测 + 解析中介机制
-    #    适用场景：科研优化、临床个性化定制
+    # 1. Mediation model (nested): [T, V, F, Ŵ (predicted width), Ĥ (predicted height)]
+    #    Geometric features source: First layer model predictions
+    #    Core objective: High-precision prediction +解析中介机制
+    #    Application scenarios: Research optimization, clinical personalized customization
     # --------------------------
 
-    # 1.1 第一步：用3个打印参数预测宽和高（第一层：3个输入变量）
-    # 线性回归预测宽高
+    # 1.1 First step: Predict width and height using 3 printing parameters (first layer: 3 input variables)
+    # Linear regression for width and height prediction
     for mediator in mediators:
         model = LinearRegression()
-        # 明确使用3个打印参数作为输入
+        # Explicitly use 3 printing parameters as input
         model.fit(train_data[predictors], train_data[mediator])
         key = f'mediator_linear_{mediator.lower()}'
         models[key] = model
@@ -183,11 +183,11 @@ def run_regression_experiment(seed):
             'intercept': model.intercept_
         }
 
-    # 多项式回归预测宽高
+    # Polynomial regression for width and height prediction
     for degree in poly_degrees:
         for mediator in mediators:
             poly = PolynomialFeatures(degree=degree)
-            # 明确使用3个打印参数作为输入
+            # Explicitly use 3 printing parameters as input
             X_train_poly = poly.fit_transform(train_data[predictors])
             X_val_poly = poly.transform(val_data[predictors])
 
@@ -220,12 +220,12 @@ def run_regression_experiment(seed):
                 'poly_features': poly.get_feature_names_out(predictors)
             }
 
-    # 1.2 第二步：用【3个打印参数 + 2个预测的宽高】预测机械模量（第二层：5个输入变量）
+    # 1.2 Second step: Predict mechanical modulus using [3 printing parameters + 2 predicted width/height] (second layer: 5 input variables)
     def create_mediation_model(degree=1):
         width_model_key = f'mediator_linear_width' if degree == 1 else f'mediator_poly{degree}_width'
         height_model_key = f'mediator_linear_height' if degree == 1 else f'mediator_poly{degree}_height'
 
-        # 预测宽高
+        # Predict width and height
         if degree == 1:
             train_pred_width = models[width_model_key].predict(train_data[predictors])
             train_pred_height = models[height_model_key].predict(train_data[predictors])
@@ -237,16 +237,16 @@ def run_regression_experiment(seed):
                 models[height_model_key]['poly'].transform(train_data[predictors])
             )
 
-        # 创建第二层特征：3个打印参数 + 2个预测的宽高（共5个特征）
+        # Create second layer features: 3 printing parameters + 2 predicted width/height (total 5 features)
         train_mediation_features = train_data[predictors].copy()
         train_mediation_features['predicted_width'] = train_pred_width
         train_mediation_features['predicted_height'] = train_pred_height
 
-        # 验证特征数量是否为5
+        # Verify feature count is 5
         assert train_mediation_features.shape[
-                   1] == 5, f"中介模型第二层特征数量错误: 应为5，实际为{train_mediation_features.shape[1]}"
+                   1] == 5, f"Incorrect feature count for mediation model second layer: should be 5, actual {train_mediation_features.shape[1]}"
 
-        # 为验证集创建相同的特征
+        # Create same features for validation set
         if degree == 1:
             val_pred_width = models[width_model_key].predict(val_data[predictors])
             val_pred_height = models[height_model_key].predict(val_data[predictors])
@@ -262,11 +262,11 @@ def run_regression_experiment(seed):
         val_mediation_features['predicted_width'] = val_pred_width
         val_mediation_features['predicted_height'] = val_pred_height
 
-        # 验证特征数量是否为5
+        # Verify feature count is 5
         assert val_mediation_features.shape[
-                   1] == 5, f"中介模型第二层验证特征数量错误: 应为5，实际为{val_mediation_features.shape[1]}"
+                   1] == 5, f"Incorrect validation feature count for mediation model second layer: should be 5, actual {val_mediation_features.shape[1]}"
 
-        # 训练最终模型（使用5个特征）
+        # Train final model (using 5 features)
         if degree == 1:
             final_model = LinearRegression()
             final_model.fit(train_mediation_features, train_data[target])
@@ -276,7 +276,7 @@ def run_regression_experiment(seed):
                 'features': train_mediation_features.columns.tolist()
             }
         else:
-            # 使用degree=1确保不会增加新的交互特征，保持5个输入特征
+            # Use degree=1 to ensure no new interaction features, maintaining 5 input features
             poly_final = PolynomialFeatures(degree=1)
             X_train_final = poly_final.fit_transform(train_mediation_features)
             X_val_final = poly_final.transform(val_mediation_features)
@@ -304,7 +304,7 @@ def run_regression_experiment(seed):
                 'features': train_mediation_features.columns.tolist()
             }
 
-    # 创建不同阶数的中介模型
+    # Create mediation models with different degrees
     for degree in [1] + poly_degrees:
         model, poly, val_mediation_features, params = create_mediation_model(degree)
         key = f'mediation_model_degree{degree}'
@@ -312,7 +312,7 @@ def run_regression_experiment(seed):
             'model': model,
             'poly': poly,
             'degree': degree,
-            'val_features': val_mediation_features  # 保存验证集特征用于评估
+            'val_features': val_mediation_features  # Save validation features for evaluation
         }
         model_params[key] = params
         if degree == 1:
@@ -321,13 +321,13 @@ def run_regression_experiment(seed):
             model_names[key] = f'Mediation Model (Polynomial degree={degree})'
 
     # --------------------------
-    # 2. 直接模型：[T（温度）、V（速度）、F（进给率）]
-    #    几何特征来源：无
-    #    核心目标：快速初步预测性能
-    #    适用场景：低精度需求、快速筛选参数
+    # 2. Direct model: [T (temperature), V (speed), F (feed rate)]
+    #    Geometric features source: None
+    #    Core objective: Fast preliminary performance prediction
+    #    Application scenarios: Low precision requirements, rapid parameter screening
     # --------------------------
 
-    # 线性直接模型
+    # Linear direct model
     model = LinearRegression()
     model.fit(train_data[predictors], train_data[target])
     key = 'direct_linear'
@@ -339,11 +339,11 @@ def run_regression_experiment(seed):
         'features': predictors
     }
 
-    # 多项式直接模型
+    # Polynomial direct models
     for degree in poly_degrees:
         poly = PolynomialFeatures(degree=degree)
         X_train_poly = poly.fit_transform(train_data[predictors])
-        X_val_poly = poly.transform(val_data[predictors])  # 保存验证集特征
+        X_val_poly = poly.transform(val_data[predictors])  # Save validation features
 
         best_alpha = None
         best_r2 = -np.inf
@@ -365,7 +365,7 @@ def run_regression_experiment(seed):
         models[key] = {
             'model': best_model,
             'poly': poly,
-            'val_features': X_val_poly  # 保存验证集特征
+            'val_features': X_val_poly  # Save validation features
         }
         model_names[key] = f'Direct Polynomial Model (degree={degree})'
         model_params[key] = {
@@ -377,15 +377,15 @@ def run_regression_experiment(seed):
         }
 
     # --------------------------
-    # 3. 混合模型：[T、V、F、W_true（真实宽）、H_true（真实高）]
-    #    几何特征来源：物理测量（如 SEM）
-    #    核心目标：验证几何特征的增益潜力
-    #    适用场景：模型性能上限参照
+    # 3. Hybrid model: [T, V, F, W_true (actual width), H_true (actual height)]
+    #    Geometric features source: Physical measurements (e.g., SEM)
+    #    Core objective: Verify gain potential of geometric features
+    #    Application scenarios: Model performance upper limit reference
     # --------------------------
 
-    hybrid_features = predictors + mediators  # 3个打印参数 + 2个实际宽高
+    hybrid_features = predictors + mediators  # 3 printing parameters + 2 actual width/height
 
-    # 线性混合模型
+    # Linear hybrid model
     model = LinearRegression()
     model.fit(train_data[hybrid_features], train_data[target])
     key = 'hybrid_linear'
@@ -397,11 +397,11 @@ def run_regression_experiment(seed):
         'features': hybrid_features
     }
 
-    # 多项式混合模型
+    # Polynomial hybrid models
     for degree in poly_degrees:
         poly = PolynomialFeatures(degree=degree)
         X_train_poly = poly.fit_transform(train_data[hybrid_features])
-        X_val_poly = poly.transform(val_data[hybrid_features])  # 保存验证集特征
+        X_val_poly = poly.transform(val_data[hybrid_features])  # Save validation features
 
         best_alpha = None
         best_r2 = -np.inf
@@ -423,7 +423,7 @@ def run_regression_experiment(seed):
         models[key] = {
             'model': best_model,
             'poly': poly,
-            'val_features': X_val_poly  # 保存验证集特征
+            'val_features': X_val_poly  # Save validation features
         }
         model_names[key] = f'Hybrid Polynomial Model (degree={degree})'
         model_params[key] = {
@@ -435,16 +435,16 @@ def run_regression_experiment(seed):
         }
 
     # --------------------------
-    # 评估所有模型（同时计算验证集和测试集）
+    # Evaluate all models (calculate for both validation and test sets)
     # --------------------------
 
-    # 评估中介模型
+    # Evaluate mediation models
     for degree in [1] + poly_degrees:
         key = f'mediation_model_degree{degree}'
         model_info = models[key]
         degree_mediator = model_info['degree']
 
-        # 验证集评估
+        # Validation set evaluation
         val_mediation_features = model_info['val_features']
         if model_info['poly'] is None:
             y_pred_val = model_info['model'].predict(val_mediation_features)
@@ -453,11 +453,11 @@ def run_regression_experiment(seed):
             y_pred_val = model_info['model'].predict(X_val_final)
         y_true_val = val_data[target]
 
-        # 测试集评估
+        # Test set evaluation
         width_model_key = f'mediator_linear_width' if degree_mediator == 1 else f'mediator_poly{degree_mediator}_width'
         height_model_key = f'mediator_linear_height' if degree_mediator == 1 else f'mediator_poly{degree_mediator}_height'
 
-        # 生成测试集的预测宽高
+        # Generate predicted width and height for test set
         if degree_mediator == 1:
             test_pred_width = models[width_model_key].predict(test_data[predictors])
             test_pred_height = models[height_model_key].predict(test_data[predictors])
@@ -469,16 +469,16 @@ def run_regression_experiment(seed):
                 models[height_model_key]['poly'].transform(test_data[predictors])
             )
 
-        # 创建测试集的5个特征：3个打印参数 + 2个预测宽高
+        # Create 5 features for test set: 3 printing parameters + 2 predicted width/height
         test_mediation_features = test_data[predictors].copy()
         test_mediation_features['predicted_width'] = test_pred_width
         test_mediation_features['predicted_height'] = test_pred_height
 
-        # 验证特征数量是否为5
+        # Verify feature count is 5
         assert test_mediation_features.shape[
-                   1] == 5, f"中介模型第二层测试特征数量错误: 应为5，实际为{test_mediation_features.shape[1]}"
+                   1] == 5, f"Incorrect test feature count for mediation model second layer: should be 5, actual {test_mediation_features.shape[1]}"
 
-        # 预测并评估
+        # Predict and evaluate
         if model_info['poly'] is None:
             y_pred_test = model_info['model'].predict(test_mediation_features)
         else:
@@ -486,7 +486,7 @@ def run_regression_experiment(seed):
             y_pred_test = model_info['model'].predict(X_test_final)
         y_true_test = test_data[target]
 
-        # 存储验证集和测试集结果
+        # Store validation and test results
         results[key] = {
             'val': {
                 'MSE': mean_squared_error(y_true_val, y_pred_val),
@@ -502,13 +502,13 @@ def run_regression_experiment(seed):
             }
         }
 
-    # 评估直接模型
+    # Evaluate direct models
     key = 'direct_linear'
     model = models[key]
-    # 验证集
+    # Validation set
     y_pred_val = model.predict(val_data[predictors])
     y_true_val = val_data[target]
-    # 测试集
+    # Test set
     y_pred_test = model.predict(test_data[predictors])
     y_true_test = test_data[target]
     results[key] = {
@@ -529,10 +529,10 @@ def run_regression_experiment(seed):
     for degree in poly_degrees:
         key = f'direct_poly{degree}'
         model_info = models[key]
-        # 验证集
+        # Validation set
         y_pred_val = model_info['model'].predict(model_info['val_features'])
         y_true_val = val_data[target]
-        # 测试集
+        # Test set
         X_test_poly = model_info['poly'].transform(test_data[predictors])
         y_pred_test = model_info['model'].predict(X_test_poly)
         y_true_test = test_data[target]
@@ -551,13 +551,13 @@ def run_regression_experiment(seed):
             }
         }
 
-    # 评估混合模型
+    # Evaluate hybrid models
     key = 'hybrid_linear'
     model = models[key]
-    # 验证集
+    # Validation set
     y_pred_val = model.predict(val_data[hybrid_features])
     y_true_val = val_data[target]
-    # 测试集
+    # Test set
     y_pred_test = model.predict(test_data[hybrid_features])
     y_true_test = test_data[target]
     results[key] = {
@@ -578,10 +578,10 @@ def run_regression_experiment(seed):
     for degree in poly_degrees:
         key = f'hybrid_poly{degree}'
         model_info = models[key]
-        # 验证集
+        # Validation set
         y_pred_val = model_info['model'].predict(model_info['val_features'])
         y_true_val = val_data[target]
-        # 测试集
+        # Test set
         X_test_poly = model_info['poly'].transform(test_data[hybrid_features])
         y_pred_test = model_info['model'].predict(X_test_poly)
         y_true_test = test_data[target]
@@ -604,15 +604,15 @@ def run_regression_experiment(seed):
 
 
 def calculate_statistics(results_list):
-    """计算多次实验结果的统计量：平均值、标准差和变异系数（包含验证集和测试集）"""
+    """Calculate statistics for multiple experiments: mean, standard deviation, and coefficient of variation (including validation and test sets)"""
     if not results_list:
         return {}
 
-    # 初始化统计结果字典
+    # Initialize statistics results dictionary
     stats_results = {}
     model_keys = results_list[0].keys()
 
-    # 为每个模型初始化指标列表（包含val和test）
+    # Initialize metric lists for each model (including val and test)
     for model_key in model_keys:
         stats_results[model_key] = {
             'val': {
@@ -629,14 +629,14 @@ def calculate_statistics(results_list):
             }
         }
 
-    # 收集所有实验结果
+    # Collect all experiment results
     for model_key in model_keys:
         for dataset_type in ['val', 'test']:
             for metric in ['MSE', 'R2', 'MAE', 'MedAE']:
                 values = [result[model_key][dataset_type][metric] for result in results_list]
                 mean_val = np.mean(values)
                 std_val = np.std(values)
-                # 变异系数 = 标准差 / 平均值（处理平均值为0的情况）
+                # Coefficient of variation = standard deviation / mean (handle case when mean is 0)
                 cv_val = std_val / mean_val if mean_val != 0 else 0
 
                 stats_results[model_key][dataset_type][metric]['mean'] = mean_val
@@ -647,18 +647,18 @@ def calculate_statistics(results_list):
 
 
 def calculate_mediation_effect(stats_results):
-    """计算中介效应比例"""
-    # 总效应 (直接模型的效应)
+    """Calculate mediation effect ratio"""
+    # Total effect (effect of direct model)
     total_effect = stats_results['direct_linear']['test']['R2']['mean']
 
-    # 直接效应 (控制中介变量后的直接效应)
+    # Direct effect (direct effect after controlling for mediator variables)
     direct_effect = stats_results['hybrid_linear']['test']['R2']['mean'] - \
                     stats_results['mediation_model_degree1']['test']['R2']['mean']
 
-    # 中介效应 = 总效应 - 直接效应
+    # Mediation effect = total effect - direct effect
     mediation_effect = total_effect - direct_effect
 
-    # 中介比例
+    # Mediation ratio
     mediation_ratio = mediation_effect / total_effect if total_effect != 0 else 0
 
     return {
@@ -670,30 +670,31 @@ def calculate_mediation_effect(stats_results):
 
 
 def save_statistics_table(stats_results, model_names, output_file):
-    """将统计结果保存为表格（CSV格式）"""
+    """Save statistics results as CSV table"""
     rows = []
 
-    # 添加表头
-    rows.append(["模型类型", "数据集类型", "指标", "平均值", "标准差", "平均值 ± 标准差", "变异系数(CV)"])
+    # Add header
+    rows.append(["Model Type", "Dataset Type", "Metric", "Mean", "Standard Deviation", "Mean ± Std",
+                 "Coefficient of Variation (CV)"])
 
-    # 遍历所有模型和指标
+    # Iterate through all models and metrics
     for model_key in stats_results:
         model_name = model_names[model_key]
         for dataset_type in ['val', 'test']:
-            dataset_name = "验证集" if dataset_type == 'val' else "测试集"
+            dataset_name = "Validation Set" if dataset_type == 'val' else "Test Set"
             for metric in ['MSE', 'R2', 'MAE', 'MedAE']:
                 metric_name = {
-                    'MSE': '均方误差',
-                    'R2': '决定系数',
-                    'MAE': '平均绝对误差',
-                    'MedAE': '中位数绝对误差'
+                    'MSE': 'Mean Squared Error',
+                    'R2': 'Coefficient of Determination',
+                    'MAE': 'Mean Absolute Error',
+                    'MedAE': 'Median Absolute Error'
                 }[metric]
 
                 mean_val = stats_results[model_key][dataset_type][metric]['mean']
                 std_val = stats_results[model_key][dataset_type][metric]['std']
                 cv_val = stats_results[model_key][dataset_type][metric]['cv']
 
-                # 格式化数据
+                # Format data
                 mean_str = f"{mean_val:.4f}"
                 std_str = f"{std_val:.4f}"
                 mean_std_str = f"{mean_val:.4f} ± {std_val:.4f}"
@@ -701,155 +702,137 @@ def save_statistics_table(stats_results, model_names, output_file):
 
                 rows.append([model_name, dataset_name, metric_name, mean_str, std_str, mean_std_str, cv_str])
 
-    # 创建DataFrame并保存为CSV
+    # Create DataFrame and save as CSV
     df = pd.DataFrame(rows[1:], columns=rows[0])
     df.to_csv(output_file, index=False, encoding='utf-8-sig')
-    print(f"统计结果表格已保存到: {output_file}")
+    print(f"Statistics table saved to: {output_file}")
 
 
-# 主程序
+# Main program
 if __name__ == "__main__":
-    # 创建输出目录
+    # Create output directories
     os.makedirs("outputs", exist_ok=True)
-    os.makedirs("model_parameters", exist_ok=True)  # 模型参数保存目录
-    # 创建每个模型最佳参数的保存目录
+    os.makedirs("model_parameters", exist_ok=True)  # Model parameters directory
+    # Create directory for best parameters per model
     os.makedirs(os.path.join("model_parameters", "best_per_model"), exist_ok=True)
 
-    # 开始计时
+    # Start timing
     start_time = time.time()
 
-    # 生成唯一的日志文件名
+    # Generate unique log filename
     base_log_file = "Regression_Intermediary(multi seeds)_regression_log.txt"
     log_file = get_unique_filename(os.path.join("outputs", base_log_file))
 
-    # 重定向输出流
+    # Redirect output stream
     sys.stdout = Logger(log_file)
 
-    print(f"开始中介效应回归分析，日志将保存到 {log_file}")
-    print(f"开始时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"使用种子列表: {seeds}")
-    print("使用基于机械模量的分层抽样进行数据集划分")
-    print("模型参数组合:")
-    print("- 直接模型: [T（温度）、V（速度）、F（进给率）]，无几何特征")
-    print("- 中介模型: [T、V、F、Ŵ（预测宽）、Ĥ（预测高）]，几何特征来自第一层模型预测")
-    print("- 混合模型: [T、V、F、W_true（真实宽）、H_true（真实高）]，几何特征来自物理测量")
+    print(f"Starting mediation effect regression analysis. Log will be saved to {log_file}")
+    print(f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Using seed list: {seeds}")
+    print("Using stratified sampling based on mechanical modulus for dataset partitioning")
+    print("Model parameter combinations:")
+    print("- Direct model: [T (temperature), V (speed), F (feed rate)], no geometric features")
+    print(
+        "- Mediation model: [T, V, F, Ŵ (predicted width), Ĥ (predicted height)], geometric features from first layer model predictions")
+    print(
+        "- Hybrid model: [T, V, F, W_true (actual width), H_true (actual height)], geometric features from physical measurements")
     print("=" * 50)
 
-    # 运行多次实验
+    # Run multiple experiments
     results_list = []
-    all_model_params = []  # 存储所有种子的模型参数
+    all_model_params = []  # Store model parameters for all seeds
     model_names = None
     y_true_val = None
     y_true_test = None
 
     for i, seed in enumerate(seeds):
         print(f"\n{'=' * 30}")
-        print(f"运行实验 {i + 1}/{len(seeds)}，种子: {seed}")
+        print(f"Running experiment {i + 1}/{len(seeds)}, seed: {seed}")
         print(f"{'=' * 30}")
 
         results, exp_model_names, exp_model_params, exp_y_val, exp_y_test = run_regression_experiment(seed)
         results_list.append(results)
         all_model_params.append(exp_model_params)
 
-        # 保存模型名称（所有实验相同）
+        # Save model names (consistent across all experiments)
         if model_names is None:
             model_names = exp_model_names
             y_true_val = exp_y_val
             y_true_test = exp_y_test
 
-        # 输出当前种子的评估结果（包含验证集和测试集）
-        print(f"\n实验 {i + 1} 各模型评估结果:")
+        # Output evaluation results for current seed (including validation and test sets)
+        print(f"\nExperiment {i + 1} model evaluation results:")
         print('-' * 60)
         for model_key in results:
             print(f'{model_names[model_key]}:')
-            print(f'  验证集:')
+            print(f'  Validation set:')
             print(f'    MSE: {results[model_key]["val"]["MSE"]:.4f}')
             print(f'    R2: {results[model_key]["val"]["R2"]:.4f}')
             print(f'    MAE: {results[model_key]["val"]["MAE"]:.4f}')
             print(f'    MedAE: {results[model_key]["val"]["MedAE"]:.4f}')
-            print(f'  测试集:')
+            print(f'  Test set:')
             print(f'    MSE: {results[model_key]["test"]["MSE"]:.4f}')
             print(f'    R2: {results[model_key]["test"]["R2"]:.4f}')
             print(f'    MAE: {results[model_key]["test"]["MAE"]:.4f}')
             print(f'    MedAE: {results[model_key]["test"]["MedAE"]:.4f}')
             print('-' * 60)
 
-    # 计算统计结果（平均值、标准差、变异系数）
+    # Calculate statistics (mean, standard deviation, coefficient of variation)
     print("\n" + "=" * 50)
-    print("计算多次实验的统计结果...")
+    print("Calculating statistics across multiple experiments...")
     stats_results = calculate_statistics(results_list)
 
-    # 输出统计评估结果（包含验证集和测试集）
+    # Output statistical evaluation results (including validation and test sets)
     print("\n" + "=" * 50)
-    print("所有模型统计评估结果（保留4位小数）:")
+    print("All models statistical evaluation results (4 decimal places):")
     print('=' * 50)
     for model_key in stats_results:
-        print(f'\n{model_names[model_key]} 统计评估：')
-        print(f'  验证集:')
+        print(f'\n{model_names[model_key]} statistical evaluation:')
+        print(f'  Validation set:')
         print(
-            f'    均方误差 (MSE): {stats_results[model_key]["val"]["MSE"]["mean"]:.4f} ± {stats_results[model_key]["val"]["MSE"]["std"]:.4f}, CV={stats_results[model_key]["val"]["MSE"]["cv"]:.4f}')
+            f'    Mean Squared Error (MSE): {stats_results[model_key]["val"]["MSE"]["mean"]:.4f} ± {stats_results[model_key]["val"]["MSE"]["std"]:.4f}, CV={stats_results[model_key]["val"]["MSE"]["cv"]:.4f}')
         print(
-            f'    决定系数 (R2): {stats_results[model_key]["val"]["R2"]["mean"]:.4f} ± {stats_results[model_key]["val"]["R2"]["std"]:.4f}, CV={stats_results[model_key]["val"]["R2"]["cv"]:.4f}')
+            f'    Coefficient of Determination (R2): {stats_results[model_key]["val"]["R2"]["mean"]:.4f} ± {stats_results[model_key]["val"]["R2"]["std"]:.4f}, CV={stats_results[model_key]["val"]["R2"]["cv"]:.4f}')
         print(
-            f'    平均绝对误差 (MAE): {stats_results[model_key]["val"]["MAE"]["mean"]:.4f} ± {stats_results[model_key]["val"]["MAE"]["std"]:.4f}, CV={stats_results[model_key]["val"]["MAE"]["cv"]:.4f}')
+            f'    Mean Absolute Error (MAE): {stats_results[model_key]["val"]["MAE"]["mean"]:.4f} ± {stats_results[model_key]["val"]["MAE"]["std"]:.4f}, CV={stats_results[model_key]["val"]["MAE"]["cv"]:.4f}')
         print(
-            f'    中位数绝对误差 (MedAE): {stats_results[model_key]["val"]["MedAE"]["mean"]:.4f} ± {stats_results[model_key]["val"]["MedAE"]["std"]:.4f}, CV={stats_results[model_key]["val"]["MedAE"]["cv"]:.4f}')
-        print(f'  测试集:')
+            f'    Median Absolute Error (MedAE): {stats_results[model_key]["val"]["MedAE"]["mean"]:.4f} ± {stats_results[model_key]["val"]["MedAE"]["std"]:.4f}, CV={stats_results[model_key]["val"]["MedAE"]["cv"]:.4f}')
+        print(f'  Test set:')
         print(
-            f'    均方误差 (MSE): {stats_results[model_key]["test"]["MSE"]["mean"]:.4f} ± {stats_results[model_key]["test"]["MSE"]["std"]:.4f}, CV={stats_results[model_key]["test"]["MSE"]["cv"]:.4f}')
+            f'    Mean Squared Error (MSE): {stats_results[model_key]["test"]["MSE"]["mean"]:.4f} ± {stats_results[model_key]["test"]["MSE"]["std"]:.4f}, CV={stats_results[model_key]["test"]["MSE"]["cv"]:.4f}')
         print(
-            f'    决定系数 (R2): {stats_results[model_key]["test"]["R2"]["mean"]:.4f} ± {stats_results[model_key]["test"]["R2"]["std"]:.4f}, CV={stats_results[model_key]["test"]["R2"]["cv"]:.4f}')
+            f'    Coefficient of Determination (R2): {stats_results[model_key]["test"]["R2"]["mean"]:.4f} ± {stats_results[model_key]["test"]["R2"]["std"]:.4f}, CV={stats_results[model_key]["test"]["R2"]["cv"]:.4f}')
         print(
-            f'    平均绝对误差 (MAE): {stats_results[model_key]["test"]["MAE"]["mean"]:.4f} ± {stats_results[model_key]["test"]["MAE"]["std"]:.4f}, CV={stats_results[model_key]["test"]["MAE"]["cv"]:.4f}')
+            f'    Mean Absolute Error (MAE): {stats_results[model_key]["test"]["MAE"]["mean"]:.4f} ± {stats_results[model_key]["test"]["MAE"]["std"]:.4f}, CV={stats_results[model_key]["test"]["MAE"]["cv"]:.4f}')
         print(
-            f'    中位数绝对误差 (MedAE): {stats_results[model_key]["test"]["MedAE"]["mean"]:.4f} ± {stats_results[model_key]["test"]["MedAE"]["std"]:.4f}, CV={stats_results[model_key]["test"]["MedAE"]["cv"]:.4f}')
+            f'    Median Absolute Error (MedAE): {stats_results[model_key]["test"]["MedAE"]["mean"]:.4f} ± {stats_results[model_key]["test"]["MedAE"]["std"]:.4f}, CV={stats_results[model_key]["test"]["MedAE"]["cv"]:.4f}')
+        print('-' * 60)
 
-    # 计算并输出中介效应
+    # Calculate and output mediation effect
     print("\n" + "=" * 50)
-    print("中介效应分析结果:")
+    print("Mediation effect analysis results:")
     print("=" * 50)
-    mediation_stats = calculate_mediation_effect(stats_results)
-    print(f"总效应 (直接模型R²): {mediation_stats['total_effect']:.4f}")
-    print(f"直接效应 (控制中介变量后的直接效应): {mediation_stats['direct_effect']:.4f}")
-    print(f"中介效应 (总效应 - 直接效应): {mediation_stats['mediation_effect']:.4f}")
-    print(f"中介效应比例: {mediation_stats['mediation_ratio']:.2%}")
+    mediation_effect = calculate_mediation_effect(stats_results)
+    print(f"Total effect (R² from direct model): {mediation_effect['total_effect']:.4f}")
+    print(f"Direct effect: {mediation_effect['direct_effect']:.4f}")
+    print(f"Mediation effect: {mediation_effect['mediation_effect']:.4f}")
+    print(
+        f"Mediation ratio: {mediation_effect['mediation_ratio']:.4f} ({mediation_effect['mediation_ratio'] * 100:.2f}%)")
 
-    # 保存统计结果表格
-    stats_file = get_unique_filename(os.path.join("outputs", "regression_statistics.csv"))
-    save_statistics_table(stats_results, model_names, stats_file)
+    # Save statistics table
+    stats_table_file = get_unique_filename(os.path.join("outputs", "regression_statistics.csv"))
+    save_statistics_table(stats_results, model_names, stats_table_file)
 
-
-    # 保存每种模型中性能最好的参数（基于测试集R²）
-    print("\n" + "=" * 50)
-    print("保存每种模型中性能最佳的参数...")
-
-    # 为每个模型类型创建子目录
-    for model_key in stats_results:
-        model_dir = os.path.join("model_parameters", "best_per_model", model_key)
-        os.makedirs(model_dir, exist_ok=True)
-
-        # 找出该模型在所有种子中表现最好的一次（基于测试集R²）
-        best_seed_idx = np.argmax([results[model_key]['test']['R2'] for results in results_list])
-        best_seed = seeds[best_seed_idx]
-        best_params = all_model_params[best_seed_idx][model_key]
-
-        # 保存最佳参数
-        param_file = os.path.join(model_dir, f"best_params_seed_{best_seed}.pkl")
-        joblib.dump(best_params, param_file)
-
-        # 输出信息
-        print(f"模型 {model_names[model_key]} 最佳参数 (种子 {best_seed}) 已保存到: {param_file}")
-        print(f"  对应的测试集R²: {results_list[best_seed_idx][model_key]['test']['R2']:.4f}")
-
-    # 计算并输出总运行时间
+    # Calculate and output total running time
     end_time = time.time()
-    total_time = timedelta(seconds=end_time - start_time)
+    total_time = timedelta(seconds=int(end_time - start_time))
     print("\n" + "=" * 50)
-    print(f"分析完成! 总运行时间: {total_time}")
-    print(f"结束时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"所有结果已保存到 'outputs' 和 'model_parameters' 目录")
+    print(f"Analysis completed successfully!")
+    print(f"End time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Total running time: {total_time}")
+    print(f"Results log saved to: {log_file}")
+    print(f"Statistics table saved to: {stats_table_file}")
+    print("=" * 50)
 
-    # 恢复标准输出
-    sys.stdout.log.close()
+    # Restore standard output
     sys.stdout = sys.stdout.terminal
-    print(f"\n程序执行完毕。详细结果请查看日志文件: {log_file}")
